@@ -1,0 +1,328 @@
+---
+title: "Projet 3 : Classification bayésienne et analyse factorielle discriminante"
+author: "Antoine LI, Lucas TONLOP"
+date: "2025-2026"
+output: 
+  html_document: 
+    toc: true
+---
+
+
+## Introduction
+Ce projet a pour but de développer une chaîne de traitement NLP (Natural Language Processing) pour classifier des thèses de doctorat françaises. 
+L'objectif principal est de prédire le domaine d'étude (la variable cible) à partir du résumé de la thèse (variable textuelle).
+
+
+```{r setup, include=FALSE}
+# Ceci permet de ne pas afficher les messages d'avertissement et les messages d'information dans le rapport final
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  results = 'hold'
+)
+
+```
+
+
+
+## 1. Chargement et exploration des données
+Le jeu de données complet contient plus de 400 000 thèses. C'est un volume important difficile à traiter brut.
+Les variables principales sont `Description` (le résumé) et `Domain` (la classe à prédire).
+Pour garantir la fiabilité du modèle, nous allons nous concentrer sur les domaines les plus représentés.
+
+```{r}
+# Chargement des librairies nécessaires
+library(readr)
+library(dplyr)
+library(ggplot2)
+```
+
+```{r}
+# 1.1 Chargement et Filtrage des données
+# Source des données : Recherche de similarité sémantique de thèse de doctorat française (Kaggle)
+
+data_raw <- read_csv("french_thesis_20231021_metadata.csv", show_col_types = FALSE)
+
+# Nettoyage des lignes vides
+data_clean <- data_raw %>%
+  select(Description, Domain) %>%
+  filter(!is.na(Description) & !is.na(Domain))
+
+# Sélection des Top Domaines :
+# Nous ne gardons que les 20 domaines les plus fréquents.
+# Cela permet d'avoir assez d'exemples par classe pour que le modèle apprenne correctement.
+top_20_domains <- names(sort(table(data_clean$Domain), decreasing = TRUE)[1:20])
+
+data_filtered <- data_clean %>%
+  filter(Domain %in% top_20_domains)
+
+# Échantillonnage : On travaille sur 10 000 thèses aléatoires parmi ces domaines
+set.seed(123)
+data <- data_filtered %>% sample_n(min(nrow(data_filtered), 10000))
+
+# On nettoie les "niveaux" (catégories) vides après le filtrage
+data$Domain <- droplevels(as.factor(data$Domain))
+```
+
+```{r}
+# 1.2 Analyse descriptive
+# Vérification des dimensions finales
+print(paste("Nombre de lignes :", nrow(data)))
+print(paste("Nombre de domaines retenus :", length(unique(data$Domain))))
+
+# Affichage de la répartition des domaines
+print(sort(table(data$Domain), decreasing = TRUE))
+
+# Visualisation de la longueur des résumés
+data$longueur_mots <- sapply(strsplit(as.character(data$Description), " "), length)
+
+ggplot(data[data$longueur_mots < 1000, ], aes(x = longueur_mots)) +
+  geom_histogram(binwidth = 20, fill = "lightblue", color = "white") +
+  theme_minimal() +
+  labs(title = "Distribution de la longueur des résumés (Top Domaines)",
+       x = "Nombre de mots", y = "Nombre de thèses")
+```
+
+
+## 2. Pré-traitement des données
+Le pré-traitement transforme le texte brut en données numériques. Nous procédons en deux étapes majeures :
+- Nettoyage : Minuscules, suppression de la ponctuation, des chiffres et des mots vides (stopwords).
+- Vectorisation : Transformation en matrice TF-IDF (Term Frequency-Inverse Document Frequency).
+
+```{r}
+# Chargement des librairies spécifiques au Text Mining (NLP)
+library(tm)
+library(SnowballC)
+```
+
+```{r}
+# 2.1. Nettoyage du texte 
+# Normalisation : Passage en minuscules pour uniformiser le texte
+data$Description_clean <- tolower(data$Description)
+
+# Suppression des caractères non pertinents (bruit)
+data$Description_clean <- gsub("[0-9]+", "", data$Description_clean)      # Supprime les chiffres
+data$Description_clean <- gsub("[[:punct:]]", " ", data$Description_clean) # Supprime la ponctuation
+data$Description_clean <- gsub("\\s+", " ", data$Description_clean)        # Supprime les espaces superflus
+
+# Suppression des Stopwords (mots vides sans sens sémantique)
+# Cette étape permet de filtrer les mots très fréquents sans valeur sémantique (le, la, du...)
+mots_vides <- stopwords("french")
+
+removeWords_custom <- function(text, words) {
+  tokens <- unlist(strsplit(text, " "))
+  tokens_filtered <- tokens[!(tokens %in% words)]
+  paste(tokens_filtered, collapse = " ")
+}
+
+# Application du filtrage sur l'ensemble du corpus
+# (Cette opération nettoie le texte pour ne garder que les termes porteurs de sens)
+data$Description_clean <- sapply(data$Description_clean, function(x) removeWords_custom(x, mots_vides))
+
+# Stemming (Racinisation) : On garde la racine des mots pour réduire le vocabulaire
+# Cela permet de regrouper les variantes d'un même mot et de réduire la dimensionnalité.
+tokens_list <- strsplit(data$Description_clean, "\\s+")
+
+data$Description_stemmed <- sapply(tokens_list, function(x) {
+  paste(wordStem(x, language = "french"), collapse = " ")
+})
+
+# Vérification du résultat sur les premières lignes
+sapply(head(data$Description_stemmed, 3), substr, start = 1, stop = 150)
+```
+
+```{r}
+# 2.2. Vectorisation (TF-IDF)
+# Création du Corpus et de la Matrice Document-Termes
+corpus_final <- Corpus(VectorSource(data$Description_stemmed))
+
+dtm_tfidf <- DocumentTermMatrix(corpus_final, 
+                                control = list(weighting = weightTfIdf))
+
+# Réduction de dimension (Sparsity)
+# On supprime les mots trop rares (n'apparaissant pas dans au moins 1% des thèses) pour éviter de saturer la mémoire.
+dtm_clean <- removeSparseTerms(dtm_tfidf, 0.99)
+
+# Conversion finale en DataFrame pour le modèle
+tfidf_df <- as.data.frame(as.matrix(dtm_clean))
+
+# Préparation finale du jeu de données
+# Nettoyage des noms de colonnes pour compatibilité R
+colnames(tfidf_df) <- make.names(colnames(tfidf_df))
+
+# Ajout de la variable cible (Domaine d'étude)
+tfidf_df$Domain_Cible <- as.factor(data$Domain)
+
+# Bilan de l'extraction de caractéristiques
+print(paste("Nombre de caractéristiques (mots retenus) :", ncol(tfidf_df) - 1))
+dim(tfidf_df)
+
+# On crée une copie temporaire sans les noms de lignes pour l'affichage
+preview_tfidf <- tfidf_df[1:5, 1:10]
+rownames(preview_tfidf) <- paste("Doc", 1:5)
+print(preview_tfidf)
+```
+
+
+## 3. Entraînement du modèle bayésien
+Dans cette étape, nous construisons le modèle prédictif. Nous adoptons une approche d'apprentissage supervisé.
+Pour garantir la validité de nos résultats et éviter le sur-apprentissage (overfitting), nous divisons notre jeu de données en deux sous-ensembles :
+- Le jeu d'entraînement (Training set, 80%) : Il permet au modèle d'apprendre les probabilités d'association entre les mots (features) et les domaines.
+- Le jeu de test (Test set, 20%) : Il servira ultérieurement à évaluer la capacité de généralisation du modèle sur des données inédites.
+Nous préparons également les données en dissociant explicitement les variables explicatives (la matrice des mots) de la variable cible (le domaine), afin d'assurer la compatibilité avec l'algorithme.
+
+```{r}
+# Chargement du package pour diviser les données
+if(!require(caret)) install.packages("caret")
+library(caret)
+
+# On fixe une "graine" pour que le mélange soit toujours le même à chaque lancement
+set.seed(123)
+
+# 1. Partitionnement des données (Stratégie 80/20)
+# La fonction createDataPartition assure que la répartition des classes est respectée dans les deux jeux
+index_train <- createDataPartition(tfidf_df$Domain_Cible, p = 0.8, list = FALSE)
+
+train_set <- tfidf_df[index_train, ]
+test_set  <- tfidf_df[-index_train, ]
+
+# 2. Préparation des matrices X (Features) et Y (Cible)
+# Cette séparation est nécessaire pour optimiser le traitement par la librairie 'naivebayes'
+col_domaine <- ncol(train_set)
+x_train <- as.matrix(train_set[, -col_domaine])
+y_train <- train_set[, col_domaine]
+
+print(paste("Entraînement sur", nrow(x_train), "thèses et", ncol(x_train), "mots."))
+```
+
+```{r}
+# 3. Entraînement du modèle
+if(!require(naivebayes)) install.packages("naivebayes")
+library(naivebayes)
+
+# Nous utilisons un lissage de Laplace (laplace = 1)
+# Cela permet de gérer les mots qui n'apparaîtraient pas dans le jeu d'entraînement
+# en évitant d'assigner une probabilité nulle.
+modele_nb <- naive_bayes(x = x_train, y = y_train, laplace = 1)
+```
+
+
+## 4. Évaluation et performance du modèle
+L'objectif est maintenant de mesurer la fiabilité du modèle. Nous allons le confronter au jeu de test, c'est-à-dire aux thèses qu'il n'a jamais rencontrées lors de la phase d'apprentissage.
+Nous analyserons deux indicateurs clés :
+- L'Exactitude (Accuracy) : La proportion globale de prédictions correctes.
+- La Matrice de Confusion : Elle permet d'identifier précisément quelles classes sont bien prédites et quelles classes sont confondues entre elles.
+
+```{r}
+# 1. Préparation du test
+# On sépare les features (x) de la réponse réelle (y)
+col_domaine <- ncol(test_set)
+x_test <- as.matrix(test_set[, -col_domaine])
+y_test_reels <- test_set[, col_domaine]
+
+# 2. Génération des prédictions
+# Le modèle estime le domaine le plus probable pour chaque résumé du test
+predictions_nb <- predict(modele_nb, newdata = x_test)
+
+# Aperçu des premières classifications
+head(predictions_nb)
+```
+
+```{r}
+# 3. Analyse des résultats
+# Construction de la Matrice de Confusion
+matrice_confusion <- table(Prédiction = predictions_nb, Réalité = y_test_reels)
+
+# Calcul de l'Accuracy (Somme de la diagonale / Total)
+accuracy <- sum(diag(matrice_confusion)) / sum(matrice_confusion)
+
+print(paste("Précision globale (Accuracy) :", round(accuracy * 100, 2), "%"))
+
+# 4. Visualisation de la matrice de confusion
+# Cette matrice croise les prédictions (lignes) avec la réalité (colonnes)
+stats_classes <- confusionMatrix(predictions_nb, y_test_reels)$byClass[, "Balanced Accuracy"]
+print(round(head(stats_classes, 5), 3))
+
+```
+
+
+## 5. Analyse Factorielle Discriminante (AFD)
+Conformément à l'intitulé du projet, nous comparons maintenant notre modèle Bayésien avec une Analyse Factorielle Discriminante (LDA). 
+Comme l'AFD gère mal le grand nombre de variables (mots) généré par le TF-IDF, nous procédons d'abord à une réduction de dimension via une Analyse en Composantes Principales (ACP).
+
+```{r}
+# 1. Réduction de dimension par ACP (Analyse en Composantes Principales)
+# Cette étape permet de "résumer" l'information des milliers de mots en 50 axes principaux.
+
+print("Calcul de l'ACP en cours (réduction de dimension)...")
+# On effectue l'ACP sur les données d'entraînement (uniquement sur les mots, pas le domaine)
+# scale. = FALSE car le TF-IDF est déjà une forme de pondération
+pca_model <- prcomp(x_train, scale. = FALSE)
+
+# On décide de garder les 50 premières composantes (axes) qui contiennent le plus d'information
+n_axes <- 50
+
+# On projette nos données d'entraînement sur ces 50 axes
+train_pca <- data.frame(pca_model$x[, 1:n_axes])
+
+# On rajoute la cible (le domaine) pour pouvoir entraîner le modèle
+train_pca$Domain_Cible <- y_train
+
+# On projette aussi les données de TEST sur les mêmes axes (pour que ce soit comparable)
+test_pca_projected <- predict(pca_model, newdata = x_test)
+test_pca <- data.frame(test_pca_projected[, 1:n_axes])
+```
+
+```{r}
+# 2. Entraînement du modèle AFD (LDA)
+# Nous utilisons la librairie standard MASS
+library(MASS)
+
+
+# On entraîne le modèle sur les données réduites
+modele_lda <- lda(Domain_Cible ~ ., data = train_pca)
+```
+
+```{r}
+# 3. Prédiction et Évaluation
+# On demande au modèle de prédire les domaines du jeu de test réduit
+predictions_lda <- predict(modele_lda, newdata = test_pca)$class
+
+# Matrice de Confusion
+matrice_lda <- table(Prédiction = predictions_lda, Réalité = y_test_reels)
+
+# Calcul de l'Accuracy
+accuracy_lda <- sum(diag(matrice_lda)) / sum(matrice_lda)
+
+print(paste("Précision de l'AFD (Accuracy) :", round(accuracy_lda * 100, 2), "%"))
+
+# Comparaison rapide
+print(matrice_lda[1:5, 1:5])
+```
+
+## 6. Conclusion et Perspectives
+Ce projet avait pour objectif de développer une chaîne de traitement automatique du langage (NLP) capable de prédire le domaine scientifique d'une thèse de doctorat uniquement à partir de son résumé.
+Nous avons mis en œuvre et comparé deux approches de classification supervisée :
+Le Classifieur Bayésien Naïf (Naïve Bayes) : Une méthode probabiliste qui analyse la fréquence des mots.
+L'Analyse Factorielle Discriminante (AFD/LDA) : Une méthode géométrique qui cherche à séparer les groupes, couplée ici à une ACP (Analyse en Composantes Principales) pour réduire la dimensionnalité.
+
+```{r}
+# 6.1 Bilan des résultats
+# Récupération et affichage des scores finaux
+score_bayes <- round(accuracy * 100, 2)
+score_afd   <- round(accuracy_lda * 100, 2)
+
+print(paste("Performance du modèle Bayésien :", score_bayes, "%"))
+print(paste("Performance de l'AFD (avec ACP) :", score_afd, "%"))
+```
+
+Les résultats montrent que la classification automatique de textes complexes est possible. 
+Généralement, le Naïve Bayes est très efficace sur du texte car il gère bien le grand nombre de mots, même quand ils sont rares.
+À l'inverse, l'AFD oblige à réduire drastiquement l'information (via l'ACP) pour fonctionner, ce qui peut lui faire perdre en précision sur des nuances sémantiques fines.
+
+Pour améliorer ces performances dans de futurs travaux, nous pourrions envisager :
+- Élargir le périmètre : Traiter l'ensemble des 400 000 thèses (avec plus de puissance de calcul) au lieu de se limiter aux 20 domaines principaux.
+- Améliorer le pré-traitement : Utiliser la lemmatisation (plus précise que le stemming) ou affiner la liste des mots vides (stopwords) spécifique au langage académique.
+
+En conclusion, ce projet a validé l'efficacité des méthodes statistiques classiques pour trier de grands volumes de documents scientifiques.
