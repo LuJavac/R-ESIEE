@@ -1,0 +1,443 @@
+---
+title: "<FONT color='#0066CC'><FONT size = 4 ><DIV align= center> AP-4209 ESIEE-Paris: 2024 - 2025 </DIV></FONT></FONT>"
+output:
+  html_document:
+    highlight: textmate
+    theme: readable
+    toc: yes
+    toc_depth: 6
+    toc_float: yes
+---
+
+
+<style type="text/css">
+body, td {font-size: 15px;}
+code.r{font-size: 5px;}
+pre { font-size: 12px;}
+</style>
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+<FONT color='#0066CC'><FONT size = 4 >
+
+::: {align="center"}
+Fouille de données avec R pour la data science et l'intelligence artificielle\
+
+TD 4 : Partie II - ANALYSE FACTORIELLE DISCRIMINANTE   
+
+--Classification supervisée--
+:::
+
+</FONT></FONT>
+
+<FONT color='#0066CC'><FONT size = 4 >
+
+::: {align="center"}
+Badr TAJINI -- ESIEE Paris\
+Source : Bertrand Roudier -- ESIEE Paris
+:::
+
+</FONT></FONT>
+
+
+<hr style="border: 1px  solid gray">
+
+</hr>
+
+<DIV align = justify>
+
+<!--- /////////////////////////////////////////////////////////////////////--->
+### <FONT color='#0066CC'><FONT size = 4> 1. Introduction </FONT></FONT>
+
+Ce TD a pour objectif de réaliser la classification supervisée à l'aide de l'analyse factorielle discriminante.
+
+Dans le précédent TD, nous avons réalisé: 
+
+* Une diminution de dimension en calculant des axes de projections qui maximisent la dispersion inter groupe. Les vecteurs directeurs de ces axes factoriels correspondent aux vecteurs propres normalisés de la matrice : $\frac{B}{W}$ (méthode Anglo-saxone)   
+
+* Les statistiques inférentielles relatives à la discrimination des groupes selon les axes (tests de Wilks)
+
+* Le calcul des Scores. Ces derniers correspondent à la représentation des individus dans le plan formé par les (deux) premiers axes factoriels
+
+Dans ce TD final, nous allons réaliser une classification de chaque individu dans le plan factoriel. Pour y parvenir: 
+
+* Nous calculons le centre de gravité de chaque groupe dans le plan factoriel.
+* Pour chaque individu, nous calculons les distances le séparant des centres de chaque groupe.  
+* Nous affectons l'individu à la classe dont le centre de gravité est le plus proche.  
+
+Pour évaluer la  qualité de la méthode de classification, nous réalisons une matrice de confusion. 
+
+<U> **Rmq** </U>:  *Ce type de classification est possible que si la statistique montre préalablement l'existence significative d'une discrimination des groupes selon les axes factoriels*
+
+
+<!--- /////////////////////////////////////////////////////////////////////--->
+
+</FONT></FONT>
+
+<hr style="border: 1px  solid gray">
+
+</hr>
+
+### <FONT color='#0066CC'><FONT size = 4> 2. Prérequis </FONT></FONT>
+
+
+Nous effectuons la classification en reprenant dans un premier temps les données <VIN_QUALITES.txt>. Vous utiliserez les fonctions que vous avez développées dans le TD précédent (*MANOVA* et *AFD*)   
+Pour rappel, la fonction (*AFD* ) retourne une liste avec les Scores (coordonnées des individus sur les axes factoriels).
+
+
+```{r, echo = T, warning=F, message=F}
+# Chargement des librairies nécessaires
+if(!require(ggplot2)) install.packages("ggplot2")
+if(!require(caret)) install.packages("caret")
+if(!require(kableExtra)) install.packages("kableExtra")
+if(!require(dplyr)) install.packages("dplyr")
+library(ggplot2)
+library(caret)
+library(kableExtra)
+library(dplyr)
+
+# Fonction MANOVA (TD précédent)
+
+MANOVA <- function(X, Y) {
+  X <- as.matrix(X)
+  Y <- as.factor(Y)
+  N <- nrow(X)
+  P <- ncol(X)
+  K <- nlevels(Y)
+  
+  # Calcul des moyennes globales et par groupe
+  G <- colMeans(X)
+  XK <- split(as.data.frame(X), Y)
+  GK <- lapply(XK, colMeans)
+  
+  # Inertie Totale (SST)
+  G_mat <- matrix(rep(G, N), nrow = N, byrow = TRUE)
+  Diff_Tot <- X - G_mat
+  SS_tot <- t(Diff_Tot) %*% Diff_Tot
+  
+  # Inertie Intra (SSW)
+  SS_intra <- matrix(0, nrow = P, ncol = P)
+  for (i in 1:K) {
+    X_k <- as.matrix(XK[[i]])
+    n_k <- nrow(X_k)
+    G_k_mat <- matrix(rep(GK[[i]], n_k), nrow = n_k, byrow = TRUE)
+    Diff_k <- X_k - G_k_mat
+    SS_intra <- SS_intra + t(Diff_k) %*% Diff_k
+  }
+  
+  # Inertie Inter (SSB)
+  SS_inter <- SS_tot - SS_intra
+  
+  return(list(SS_tot = SS_tot, SS_Intra = SS_intra, SS_Inter = SS_inter))
+}
+
+
+# Fonction AFD (TD précédent)
+# Réalise la projection sur les axes discriminants
+AFD <- function(X, Y, SS_tot, SS_intra, SS_inter, nb_axes = 2) {
+  
+  # Diagonalisation de la matrice du ratio B * W^-1
+  Mat_Ratio <- SS_inter %*% solve(SS_intra)
+  
+  res_eigen <- eigen(Mat_Ratio)
+  U <- Re(res_eigen$vectors)
+  Eigen_Values <- Re(res_eigen$values)
+  Eigen_Values[Eigen_Values < 1e-7] <- 0
+  
+  # Normalisation des vecteurs propres
+  denom <- sqrt(diag(t(U) %*% SS_intra %*% U))
+  U_Norm <- scale(U, center = FALSE, scale = denom)
+  
+  # Calcul des Scores
+  Z <- scale(X, center = TRUE, scale = FALSE)
+  Scores_All <- Z %*% U_Norm
+  
+  # Création du DataFrame de sortie
+  Scores_df <- data.frame(Scores_All[, 1:nb_axes])
+  colnames(Scores_df) <- paste0("Axe", 1:nb_axes)
+  Scores_df$Class <- Y
+  
+  return(list(Scores = Scores_df, U_Norm = U_Norm))
+}
+```
+
+* La fonction permettant de réaliser le graphique est la suivante
+
+
+```{r, echo = T}
+# Fonction d'affichage graphique des scores
+AFD_graph1 <- function(data) {
+  means <- aggregate(cbind(Axe1, Axe2) ~ Class, data, mean)
+  
+  ggplot(data, aes(x = Axe1, y = Axe2, color = Class)) +
+    geom_point(alpha = 0.7, size = 2) +
+
+    # Ajout des centres de gravité
+    geom_point(data = means, aes(fill = Class), shape = 23, size = 5, color="black", stroke = 1) +
+    theme_minimal() +
+    labs(title = "Projection AFD - Classification Supervisée")
+}
+```
+
+
+
+Chargement et préparation des données sur la qualité du vin :
+```{r}
+# Chargement des données
+df <- read.table("VIN_QUALITE.txt", header = TRUE)
+
+# Séparation des variables explicatives et de la cible
+X <- df[, 1:4]
+Y <- as.factor(df$Qualite)
+```
+
+Nous lançons ensuite les calculs préparatoires (MANOVA puis AFD) pour obtenir les coordonnées factorielles (Scores) qui serviront de base à la classification.
+```{r}
+# Calcul des matrices d'inertie
+res_manova <- MANOVA(X, Y)
+
+# Calcul des axes discriminants et projection
+res_afd <- AFD(X, Y, res_manova$SS_tot, res_manova$SS_Intra, res_manova$SS_Inter)
+
+```
+
+
+Les Scores sont les suivants: 
+
+
+```{r}
+# Affichage des premiers scores
+kable(head(res_afd$Scores), caption = "Coordonnées factorielles (Scores)") %>% 
+  kable_styling(full_width = F)
+```
+
+<!--- /////////////////////////////////////////////////////////////////////--->
+
+</FONT></FONT>
+
+<hr style="border: 1px  solid gray">
+
+</hr>
+<!--------------------------------------------------------------------->
+### <FONT color='#0066CC'><FONT size = 4> 3. Classification </FONT></FONT>
+
+<br>
+
+#### <FONT color='#0066CC'><FONT size = 4> 3.1 Centres de gravité </FONT></FONT>
+
+* Nous calculons les centres de gravité de chaque groupe dans le plan factoriel. Nous pouvons, par exemple utiliser la fonction *aggregate*.  
+
+```{r}
+# Calcul des centres de gravité par classe
+Centres <- aggregate(cbind(Axe1, Axe2) ~ Class, data = res_afd$Scores, mean)
+
+kable(Centres, caption = "Centres de gravité des classes") %>% 
+  kable_styling(full_width = F)
+```
+
+<br>
+
+* La représentation des centres de gravité et des individus
+
+```{r}
+# Affichage du graphique
+AFD_graph1(res_afd$Scores)
+```
+
+
+#### <FONT color='#0066CC'><FONT size = 4> 3.2 Distances </FONT></FONT>
+
+
+* Nous calculons les distances euclidiennes de chaque individu aux différents centre de gravité de chaque groupe.
+
+```{r}
+# Récupération des données
+Scores <- res_afd$Scores
+K <- nrow(Centres)
+N <- nrow(Scores)
+
+# Initialisation de la matrice des distances
+Distances <- matrix(NA, nrow = N, ncol = K)
+colnames(Distances) <- Centres$Class
+
+# Boucle pour calculer la distance Euclidienne pour chaque classe
+for(k in 1:K) {
+  xc <- Centres[k, "Axe1"] 
+  yc <- Centres[k, "Axe2"] 
+  
+  # Formule distance Euclidienne
+  Distances[, k] <- sqrt((Scores$Axe1 - xc)^2 + (Scores$Axe2 - yc)^2)
+}
+
+kable(head(Distances), caption = "Distances aux centres de gravité") %>% 
+  kable_styling(full_width = F)
+```
+
+<br>
+
+
+* Comme le montre la figure, L'affectation d'un individu correspond à la distance minimale entre cet individu et le centre de gravité d'un groupe (figure = groupe 3)
+
+
+<br>
+
+
+```{r, echo=FALSE, fig.width = 5, fig.height = 5, fig.align = 'center'}
+knitr::include_graphics('Distance.jpg')
+```
+
+
+<!------------------------------------------------------------------------->
+#### <FONT color='#0066CC'><FONT size = 4> 3.3 Classification </FONT></FONT>
+
+Le dataframe suivant compare la classification obtenue par l'AFD et les observations (Gold Standard)
+
+
+```{r}
+# Identification de l'indice de la distance minimale pour chaque ligne
+index_min <- apply(Distances, 1, which.min)
+
+# Récupération du nom de la classe correspondante
+Prediction <- colnames(Distances)[index_min]
+
+# Création du dataframe comparant la réalité (Observed) et la prédiction (Predicted)
+Resultats_Classif <- data.frame(
+  Observed = Y,
+  Predicted = as.factor(Prediction)
+)
+
+kable(head(Resultats_Classif), caption = "Comparaison Réalité vs Prédiction") %>% 
+  kable_styling(full_width = F)
+```
+
+#### <FONT color='#0066CC'><FONT size = 4> 3.4 Qualité </FONT></FONT>
+
+* Nous pouvons maintenant réaliser la matrice des confusions en utilisant la fonction *confusionMatrix* du package *caret*
+
+```{r, message =FALSE}
+# Calcul de la matrice de confusion
+conf_mat <- confusionMatrix(data = Resultats_Classif$Predicted, 
+                            reference = Resultats_Classif$Observed)
+
+conf_mat
+```
+
+<!------------------------------------------------------------------------->
+#### <FONT color='#0066CC'><FONT size = 4> 3.5 Encapsulation </FONT></FONT>
+
+* On construit une fonction ( que nous appelerons *AFD_Classif*) et qui "encapsule" le code 
+
+La fonction doit retourner :
+
+* les centre de gravités
+* les distances de chaque individus aux centre des classes (groupes)
+* la comparaison entre la classification réalisée par l'AFD et le gold standard
+* la matrice de confusion (obtenue à l'aide de la fonction caret)
+
+```{r}
+# Fonction générique de classification supervisée
+AFD_Classif <- function(Scores_df) {
+  
+  # Calcul des centres de gravité
+  Centres <- aggregate(cbind(Axe1, Axe2) ~ Class, data = Scores_df, mean)
+  
+  # Calcul des distances aux centres
+  K <- nrow(Centres)
+  N <- nrow(Scores_df)
+  Distances <- matrix(NA, nrow = N, ncol = K)
+  colnames(Distances) <- Centres$Class
+  
+  for(k in 1:K) {
+    xc <- Centres[k, "Axe1"]
+    yc <- Centres[k, "Axe2"]
+    Distances[, k] <- sqrt((Scores_df$Axe1 - xc)^2 + (Scores_df$Axe2 - yc)^2)
+  }
+  
+  # Classification 
+  index_min <- apply(Distances, 1, which.min)
+  Prediction <- colnames(Distances)[index_min]
+  
+  Resultats <- data.frame(
+    Observed = Scores_df$Class,
+    Predicted = factor(Prediction, levels = levels(Scores_df$Class))
+  )
+  
+  # Matrice de confusion
+  Conf_Mat <- confusionMatrix(Resultats$Predicted, Resultats$Observed)
+  
+  # Retour des résultats
+  return(list(
+    Centres = Centres,
+    Distances = Distances,
+    Classification = Resultats,
+    Confusion = Conf_Mat
+  ))
+}
+```
+
+<!--------------------------------------------------------------------->
+### <FONT color='#0066CC'><FONT size = 4> 4. Déploiement </FONT></FONT>
+
+* Pour déployer le code, on utilisera le fichier *iris* fournit par défaut  dans R
+
+```{r, echo = T}
+# à compléter
+# Chargement et préparation des données Iris
+data(iris)
+X_iris <- iris[, 1:4]
+Y_iris <- iris$Species
+
+# Calcul des matrices d'inertie (MANOVA)
+manova_iris <- MANOVA(X_iris, Y_iris)
+
+# Calcul de l'AFD
+afd_iris <- AFD(X_iris, Y_iris, 
+                manova_iris$SS_tot, 
+                manova_iris$SS_Intra, 
+                manova_iris$SS_Inter)
+
+# Classification supervisée
+res_classif_iris <- AFD_Classif(afd_iris$Scores)
+
+# Visualisation graphique du résultat sur Iris
+AFD_graph1(afd_iris$Scores)
+```
+Les résultats sur le fichier *iris* sont les suivants
+
+* Centres de gravité
+
+```{r}
+kable(res_classif_iris$Centres, caption = "Centres de gravité (Iris)") %>% 
+  kable_styling(full_width = F)
+```
+
+<br> 
+
+* Distances (Aperçu)
+
+
+```{r}
+kable(head(res_classif_iris$Distances), caption = "Distances (Iris)") %>% 
+  kable_styling(full_width = F)
+```
+
+<br> 
+
+* Classification (Aperçu)
+
+
+```{r}
+kable(head(res_classif_iris$Classification), caption = "Classification (Iris)") %>% 
+  kable_styling(full_width = F)
+```
+
+* Confusion
+
+```{r}
+res_classif_iris$Confusion
+```
+
+La matrice de confusion confirme que la méthode fonctionne parfaitement sur le jeu de données Iris, avec un taux d'erreur très faible (quelques confusions entre versicolor et virginica, ce qui est attendu).

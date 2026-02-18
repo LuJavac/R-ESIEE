@@ -1,0 +1,516 @@
+---
+title: "Projet Final : Classification bayésienne et Analyse Factorielle Discriminante"
+author: "Antoine LI, Lucas TONLOP"
+date: "2025-2026"
+output: 
+  html_document: 
+    toc: true
+---
+
+
+
+## Introduction
+Ce projet vise à distinguer un texte écrit par un humain d’un texte généré par une IA, à partir d’un jeu de données issu du challenge Kaggle LLM-Detect.
+L’objectif est de construire un modèle de classification bayésienne, renforcé par une Analyse Factorielle Discriminante (AFD) afin de réduire la dimension et améliorer la séparation entre classes.
+
+
+```{r setup, include=FALSE}
+# Ceci permet de ne pas afficher les messages d'avertissement et les messages d'information dans le rapport final
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  comment = NA
+)
+```
+
+
+
+## 1. Chargement des données
+Chargement des librairies utiles, nous utilisons le fichier train_essays.csv
+Objectif : s'assurer que les packages nécessaires sont disponibles puis les charger en mémoire.
+
+
+```{r}
+library(readr)  # lire des fichiers CSV
+library(dplyr)  # manipulation de données
+
+# Charger le fichier CSV
+# Ce fichier contient les textes et la cible (humain vs IA)
+train <- read_csv("train_essays.csv")
+
+# Premier aperçu pour vérifier que tout est bien chargé
+dim(train)        # nombre de lignes / colonnes
+names(train)      # noms des colonnes
+head(train, 3)    # 3 premières lignes
+str(train)        # types de colonnes
+
+# Vérifier la variable cible et son équilibre
+# generated = 0 (humain) / 1 (IA)
+table(train$generated)                 # effectifs
+prop.table(table(train$generated))     # proportions
+```
+
+
+Le fichier 'train_essays.csv' a été chargé correctement, il contient 1378 lignes et 4 colonnes.
+La variable cible est generated : 0 = humain et 1 = IA. On observe un très fort déséquilibre de classes : 1375 textes humains contre 3 textes IA.
+Cela veut dire que l’accuracy seule sera trompeuse. Il faudra donc utiliser des métriques adaptées et une stratégie pour gérer ce déséquilibre.
+
+
+
+## 2. Données et prétraitement
+Dans cette partie, nous réalisons une première analyse exploratoire (répartition des classes et longueur des textes), puis nous appliquons un nettoyage simple du texte afin de préparer les données pour l’extraction de caractéristiques et l’apprentissage des modèles.
+
+
+```{r}
+library(ggplot2)  # visualisations
+library(stringr)  # fonctions pratiques sur du texte
+
+# Création d'une variable de classe lisible
+# Objectif : avoir une cible plus compréhensible que 0/1
+train <- train %>%
+  mutate(
+    classe = ifelse(generated == 1, "IA", "Humain"),
+    classe = factor(classe, levels = c("Humain", "IA"))
+  )
+
+# Analyse exploratoire : longueur des textes
+# Objectif : comprendre la distribution des tailles de textes (mots / caractères)
+train <- train %>%
+  mutate(
+    nb_caracteres = nchar(text),
+    nb_mots = str_count(text, boundary("word"))
+  )
+
+# Résumé statistique par classe
+train %>%
+  group_by(classe) %>%
+  summarise(
+    n = n(),
+    moy_mots = mean(nb_mots),
+    med_mots = median(nb_mots),
+    moy_car = mean(nb_caracteres),
+    med_car = median(nb_caracteres)
+  )
+
+
+# Graphique : répartition des classes
+ggplot(train, aes(x = classe)) +
+  geom_bar() +
+  theme_minimal() +
+  labs(title = "Répartition des classes (Humain vs IA)", x = NULL, y = "Nombre de textes")
+
+
+# Graphique : distribution du nombre de mots (on coupe les extrêmes pour voir mieux)
+seuil <- quantile(train$nb_mots, 0.99)
+ggplot(train %>% filter(nb_mots <= seuil), aes(x = nb_mots, fill = classe)) +
+  geom_histogram(binwidth = 25, position = "identity", alpha = 0.5) +
+  theme_minimal() +
+  labs(title = "Distribution de la longueur des textes (mots)", x = "Nombre de mots", y = "Nombre de textes")
+
+# Nettoyage du texte 
+# Objectif : normaliser le texte avant la vectorisation
+train <- train %>%
+  mutate(
+    text_clean = tolower(text),                                   # passage en minuscules
+    text_clean = str_replace_all(text_clean, "[0-9]+", " "),      # supprimer chiffres
+    text_clean = str_replace_all(text_clean, "[[:punct:]]", " "), # supprimer ponctuation
+    text_clean = str_replace_all(text_clean, "\\s+", " "),        # espaces multiples
+    text_clean = str_trim(text_clean)                             # enlever espaces début/fin
+  )
+
+# Vérification rapide, on compare un avant/après sur 2 exemples
+train %>% select(text, text_clean) %>% head(2)
+
+```
+
+
+Les statistiques montrent une différence de taille moyenne entre les textes : les textes humains contiennent en moyenne 557 mots, alors que les textes IA sont plus courts (environ 261 mots). 
+Toutefois, cette comparaison est à interpréter avec prudence car la classe IA ne contient que 3 exemples, ce qui ne permet pas de généraliser.
+L’histogramme indique que la majorité des textes se situent grossièrement entre 400 et 800 mots, avec quelques textes plus longs.
+Enfin, le nettoyage (mise en minuscules, suppression des chiffres, de la ponctuation et des espaces multiples) simplifie le texte et le rend plus adapté à la vectorisation.
+
+
+
+## 3. Extraction de caractéristiques
+
+
+
+```{r}
+# On installe/charge les packages nécessaires à la vectorisation et à la lisibilité
+library(quanteda)
+library(quanteda.textstats)
+library(dplyr)
+library(stringr)
+
+# Préparation de la cible sous forme de facteur
+train <- train %>%
+  mutate(
+    y = factor(generated, levels = c(0, 1), labels = c("Humain", "IA"))
+  )
+
+# Caractéristiques stylométriques
+# Variabilité de longueur des phrases 
+# Score de lisibilité
+
+sentence_stats <- function(txt) {
+  s <- unlist(str_split(txt, "[.!?]+"))
+  s <- str_trim(s)
+  s <- s[nchar(s) > 0]
+  if (length(s) == 0) return(c(mean_sent_len = NA, sd_sent_len = NA, n_sent = 0))
+
+  sent_len <- str_count(s, boundary("word"))
+  c(
+    mean_sent_len = mean(sent_len),
+    sd_sent_len   = sd(sent_len),
+    n_sent        = length(s)
+  )
+}
+
+sent_mat <- t(sapply(train$text, sentence_stats))
+sent_df  <- as.data.frame(sent_mat)
+
+corp <- corpus(train, text_field = "text_clean")
+read_df <- textstat_readability(corp, measure = c("Flesch", "Flesch.Kincaid")) %>%
+  as.data.frame() %>%
+  select(Flesch, Flesch.Kincaid)
+
+# Tableau final des features stylométriques
+stylo_df <- train %>%
+  transmute(
+    id = id,
+    y = y,
+    nb_mots = nb_mots,
+    nb_caracteres = nb_caracteres
+  ) %>%
+  bind_cols(sent_df) %>%
+  bind_cols(read_df)
+
+# Aperçu des premières lignes
+dim(stylo_df)
+head(stylo_df, 3)
+
+# Vectorisation TF-IDF
+# Transformer chaque texte en un vecteur de nombres utilisable par un modèle
+toks <- tokens(
+  train$text_clean,
+  remove_punct = TRUE,
+  remove_numbers = TRUE
+)
+
+# Suppression des stopwords
+toks <- tokens_remove(toks, pattern = stopwords("en"))
+
+# Création de n-grammes (1 et 2)
+toks_ng <- tokens_ngrams(toks, n = 1:2)
+
+# Construction de la matrice Document-Term
+dfm_mat <- dfm(toks_ng)
+
+# Filtrage des termes :
+nd <- ndoc(dfm_mat)
+max_doc <- floor(0.95 * nd)
+
+dfm_mat <- dfm_trim(
+  dfm_mat,
+  min_docfreq = 2,        # On garde les termes qui apparaissent dans au moins 2 textes
+  max_docfreq = max_doc, 
+  docfreq_type = "count"
+)
+
+# Calcul TF-IDF à partir de la matrice filtrée
+dfm_tfidf <- dfm_tfidf(dfm_mat)
+
+# Vérification de la taille finale
+dim(dfm_tfidf)
+```
+Les caractéristiques stylométriques ont bien été extraites : stylo_df contient 1378 textes et 9 variables.
+La vectorisation TF-IDF a ensuite transformé chaque texte en un vecteur numérique. Après filtrage des termes trop rares et trop fréquents,
+la matrice TF-IDF finale a une taille de 1378 x 44378, ce qui réduit fortement la dimension par rapport à la version
+non filtrée et rend la suite du traitement plus exploitable. La matrice TF-IDF est calculée à titre exploratoire, la suite (AFD et Naive Bayes) utilise uniquement les variables stylométriques.
+
+
+
+## 4. Analyse des facteurs discriminants
+Ici, on va faire une AFD sur les variables stylométriques car elles sont peu nombreuses et interprétables.
+On affichera l’axe discriminant (LD1) et les variables les plus discriminantes.
+
+
+```{r}
+library(MASS)
+library(ggplot2)
+library(dplyr)
+
+# Préparer la table pour l'AFD
+# On retire l'identifiant et on ne garde que la cible et les variables numériques
+afd_data <- stylo_df %>%
+  dplyr::select(-id)
+
+# Si jamais certaines lignes ont des 'NA', on les retire pour éviter les erreurs
+afd_data <- na.omit(afd_data)
+
+# Entraîner le modèle AFD (LDA)
+# On construit un axe discriminant qui sépare au mieux Humain vs IA
+modele_afd <- MASS::lda(y ~ ., data = afd_data)
+
+# Projection des textes sur les axes discriminants
+pred_afd <- predict(modele_afd, newdata = afd_data)
+
+# Résumé rapide : matrice de confusion sur les données utilisées
+table(Prediction = pred_afd$class, Realite = afd_data$y)
+
+# Visualisation des scores discriminants
+scores <- as.data.frame(pred_afd$x)
+scores$y <- afd_data$y
+
+if ("LD2" %in% colnames(scores)) {
+  ggplot(scores, aes(x = LD1, y = LD2, color = y)) +
+    geom_point(alpha = 0.7) +
+    theme_minimal() +
+    labs(title = "Projection AFD (LDA) sur les axes discriminants", x = "LD1", y = "LD2")
+} else {
+  ggplot(scores, aes(x = y, y = LD1, color = y)) +
+    geom_boxplot(alpha = 0.4) +
+    theme_minimal() +
+    labs(title = "Scores sur l'axe discriminant LD1", x = NULL, y = "LD1")
+}
+
+# Variables les plus discriminantes
+# On identifie quelles variables contribuent le plus à LD1
+coef_ld1 <- sort(abs(modele_afd$scaling[, "LD1"]), decreasing = TRUE)
+head(coef_ld1, 5)
+```
+L’AFD (LDA) construit un axe discriminant LD1 à partir des variables stylométriques pour séparer les classes. Le boxplot montre une séparation entre Humain et IA.
+La matrice de confusion (sur les données utilisées) indique que la plupart des textes humains sont bien classés, mais les textes IA sont mal reconnus.
+
+
+
+## 5. Classification bayésienne
+Dans cette partie, nous entraînons un classifieur bayésien (Naive Bayes) en utilisant les axes discriminants
+issus de l'AFD comme variables d'entrée. Puis nous réalisons une première évaluation sur un jeu de test.
+
+
+```{r}
+library(e1071)
+library(dplyr)
+
+# Jeu de données pour le Bayes : axes discriminants issus de l'AFD
+afd_scores <- as.data.frame(pred_afd$x)
+afd_scores$y <- afd_data$y
+
+# Découpage en jeu d'entraînement / jeu de test
+set.seed(123)
+
+idx_ia <- which(afd_scores$y == "IA")
+idx_h  <- which(afd_scores$y == "Humain")
+
+# Sélection de 20% des textes humains pour le test
+test_h <- sample(idx_h, size = floor(0.2 * length(idx_h)))
+train_h <- setdiff(idx_h, test_h)
+
+# Sélection d'un texte IA pour le test
+if (length(idx_ia) >= 2) {
+  test_ia <- sample(idx_ia, 1)
+} else {
+  test_ia <- integer(0)
+}
+train_ia <- setdiff(idx_ia, test_ia)
+
+# Indices finaux train / test
+test_idx  <- c(test_h, test_ia)
+train_idx <- c(train_h, train_ia)
+
+train_nb <- afd_scores[train_idx, ]
+test_nb  <- afd_scores[test_idx, ]
+
+# Entraînement Naive Bayes
+modele_nb <- naiveBayes(y ~ ., data = train_nb)
+
+# Prédire sur le jeu de test
+pred_class <- predict(modele_nb, newdata = test_nb, type = "class")
+pred_prob  <- predict(modele_nb, newdata = test_nb, type = "raw")[, "IA"]
+
+# Premier contrôle des résultats
+# Aperçu des 5 premières probabilités prédites pour la classe IA
+table(Prediction = pred_class, Realite = test_nb$y)
+head(pred_prob, 5)
+```
+Le classifieur Naive Bayes a été entraîné sur les axes discriminants issus de l’AFD, puis testé sur un sous-ensemble contenant 275 textes humains et 1 texte IA.
+La matrice de confusion montre que le modèle prédit tous les textes en “Humain”.
+Les probabilités prédites pour la classe IA sont très faibles.
+
+
+
+## 6. Évaluation et résultats
+Dans cette partie, on évalue le modèle avec des métriques adaptées aux prédictions probabilistes et on met en place une validation croisée stratifiée.
+
+
+```{r}
+library(dplyr)
+
+# Fonction utilitaire pour calculer les métriques
+compute_metrics <- function(y_true, y_pred, p_ia) {
+  y_true <- factor(y_true, levels = c("Humain", "IA"))  # Vraie classe
+  y_pred <- factor(y_pred, levels = c("Humain", "IA"))  # Classe prédite
+
+  # Comptages de base : TP/FP/FN/TN (classe positive = IA)
+  TP <- sum(y_pred == "IA" & y_true == "IA")
+  FP <- sum(y_pred == "IA" & y_true == "Humain")
+  FN <- sum(y_pred == "Humain" & y_true == "IA")
+  TN <- sum(y_pred == "Humain" & y_true == "Humain")
+
+  # Métriques classiques (centrées sur la classe IA)
+  precision <- if ((TP + FP) > 0) TP / (TP + FP) else NA
+  recall    <- if ((TP + FN) > 0) TP / (TP + FN) else NA
+  f1        <- if (!is.na(precision) && !is.na(recall) && (precision + recall) > 0) {
+    2 * precision * recall / (precision + recall)
+  } else {
+    NA
+  }
+
+  # Accuracy
+  accuracy  <- (TP + TN) / (TP + TN + FP + FN)
+  specificity <- if ((TN + FP) > 0) TN / (TN + FP) else NA
+  bal_acc   <- if (!is.na(recall) && !is.na(specificity)) (recall + specificity) / 2 else NA
+
+  # Score de Brier : évalue la qualité des probabilités (plus c'est petit, mieux c'est)
+  y_num <- ifelse(y_true == "IA", 1, 0)
+  brier <- mean((p_ia - y_num)^2)
+
+  tibble(
+    TP = TP, FP = FP, FN = FN, TN = TN,
+    Accuracy = accuracy,
+    Precision_IA = precision,
+    Recall_IA = recall,
+    F1_IA = f1,
+    Balanced_Accuracy = bal_acc,
+    Brier = brier
+  )
+}
+
+# Évaluation sur le split Test utilisé en Partie 5
+# Matrice de confusion et métriques sur test partie 5
+conf_test <- table(Prediction = pred_class, Realite = test_nb$y)
+conf_test
+
+metrics_test <- compute_metrics(test_nb$y, pred_class, pred_prob)
+metrics_test
+
+# Validation croisée stratifiée
+# On réduit la dépendance à un seul découpage train/test
+# Contrainte : on n'a que 3 textes IA -> on fait donc 3 folds pour mettre une 1 IA par fold
+# Pour éviter une fuite de données, on refait l'AFD et le Bayes à chaque fold
+library(MASS)
+library(e1071)
+
+# Données pour la CV : on garde id uniquement pour repérer les textes
+cv_df <- stylo_df %>%
+  dplyr::select(id, y, nb_mots, nb_caracteres, mean_sent_len, sd_sent_len, n_sent, Flesch, Flesch.Kincaid) %>%
+  na.omit()
+
+idx_ia <- which(cv_df$y == "IA")
+idx_h  <- which(cv_df$y == "Humain")
+
+if (length(idx_ia) < 3) stop("Pas assez d'exemples IA pour faire une CV en 3 folds.")
+
+set.seed(123)
+
+# On crée 3 groupes d'humains (stratification) et on met 1 IA dans chaque fold
+hum_shuff  <- sample(idx_h)
+hum_groups <- split(hum_shuff, cut(seq_along(hum_shuff), breaks = 3, labels = FALSE))
+
+all_preds <- list()
+
+for (k in 1:3) {
+
+  # On définit le test du fold k : un groupe d'humains et une IA
+  test_idx  <- c(hum_groups[[k]], idx_ia[k])
+  train_idx <- setdiff(seq_len(nrow(cv_df)), test_idx)
+
+  train_fold <- cv_df[train_idx, ]
+  test_fold  <- cv_df[test_idx, ]
+
+  # On retire id avant de donner les données à lda() et predict()
+  train_fold_mod <- train_fold %>% dplyr::select(-id)
+  test_fold_mod  <- test_fold  %>% dplyr::select(-id)
+
+  # Étape AFD du fold, apprise uniquement sur train_fold
+  lda_fold <- MASS::lda(y ~ ., data = train_fold_mod)
+
+  # Projection sur LD (train et test), sur les axes appris au fold
+  ld_train <- as.data.frame(predict(lda_fold, newdata = train_fold_mod)$x)
+  ld_test  <- as.data.frame(predict(lda_fold, newdata = test_fold_mod)$x)
+
+  # Ajout de la cible
+  ld_train$y <- train_fold_mod$y
+  ld_test$y  <- test_fold_mod$y
+
+  # Bayes entraîné sur les scores discriminants
+  nb_fold <- e1071::naiveBayes(y ~ ., data = ld_train)
+
+  # Prédictions sur le test du fold
+  y_pred_fold <- predict(nb_fold, newdata = ld_test %>% dplyr::select(-y), type = "class")
+  p_raw_fold  <- predict(nb_fold, newdata = ld_test %>% dplyr::select(-y), type = "raw")
+  p_ia_fold   <- p_raw_fold[, "IA"]
+  
+  # Stockage des résultats du fold
+  all_preds[[k]] <- tibble(
+    id = test_fold$id,
+    y_true = ld_test$y,
+    y_pred = y_pred_fold,
+    p_ia = p_ia_fold,
+    fold = k
+  )
+}
+
+cv_preds <- bind_rows(all_preds)
+
+# Matrice de confusion globale
+conf_cv <- table(Prediction = cv_preds$y_pred, Realite = cv_preds$y_true)
+conf_cv
+
+# Métriques globales CV
+metrics_cv <- compute_metrics(cv_preds$y_true, cv_preds$y_pred, cv_preds$p_ia)
+metrics_cv
+
+# ROC-AUC + courbe ROC
+# Avec seulement 3 IA, l'AUC sera très instable
+
+library(pROC)
+
+roc_obj <- roc(
+  response = cv_preds$y_true,
+  predictor = cv_preds$p_ia,
+  levels = c("Humain", "IA")
+)
+
+auc_val <- as.numeric(auc(roc_obj))
+auc_val
+
+plot(roc_obj, main = paste("Courbe ROC (CV 3-fold) - AUC =", round(auc_val, 3)))
+
+```
+
+
+On obtient une accuracy très élevée, mais elle est trompeuse car la classe IA est ultra minoritaire.
+Sur le test simple comme en validation croisée 3-fold, le modèle ne détecte aucun texte IA (Recall_IA = 0, TP = 0), il prédit quasiment tout en Humain.
+La matrice de confusion montre aussi quelques faux positifs (des humains prédits IA), mais surtout des faux négatifs (IA prédits Humain), ce qui est problématique si l’objectif est de repérer l’IA.
+L’AUC est d'environ 0,70, ce qui suggère une capacité de classement moyenne via les probabilités, mais ce score reste très instable vu le faible nombre d’exemples IA.
+
+
+
+## Conclusion
+Dans ce projet, nous avons cherché à distinguer des textes humains et générés par IA à partir de caractéristiques stylométriques, puis en appliquant une AFD (LDA) afin d’obtenir des axes discriminants interprétables. Enfin, nous avons entraîné un classifieur bayésien (Naive Bayes) sur ces axes et évalué le modèle avec des métriques adaptées et une validation croisée.
+
+Les résultats montrent une accuracy élevée, mais celle-ci est peu informative à cause du déséquilibre extrême des classes (seulement 3 textes IA). Le modèle prédit majoritairement “Humain”, ce qui conduit à un Recall_IA nul. L’AUC est moyenne mais reste instable étant donné le faible nombre d’exemples IA. Ces résultats doivent donc être interprétés avec prudence.
+
+
+**Limites principales :** <br>
+- Déséquilibre de classes très important (trop peu d’exemples IA). <br>
+- Évaluation instable : les métriques varient fortement selon les splits. <br>
+- Variables stylométriques simples : interprétables, mais possiblement insuffisantes pour capturer des différences fines. <br>
+
+
+**Pistes d’amélioration :** <br>
+- Augmenter le nombre d’exemples IA pour stabiliser l’apprentissage et l’évaluation. <br>
+- Tester des représentations textuelles plus riches (TF-IDF, n-grammes) et des modèles adaptés (ex : régression logistique), en gardant une évaluation centrée sur la classe IA. <br>
