@@ -1,0 +1,224 @@
+---
+title: "Analyse de Sentiment - Twitter Data"
+author: "Tonlop Lucas"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+
+```{r setup, include=FALSE}
+
+if (!require("wordcloud")) install.packages("wordcloud")
+if (!require("RColorBrewer")) install.packages("RColorBrewer")
+if (!require("tm")) install.packages("tm")
+
+library(tidyverse)
+library(wordcloud)
+library(RColorBrewer)
+library(tm)
+library(tidytext)
+```
+
+## 1. Chargement des données
+On charge les datasets d'entraînement et de validation fournis, en spécifiant les noms des colonnes pour une meilleure lisibilité.
+On définira les colonnes comme suit : ID, Entité, Sentiment, Contenu du tweet.
+```{r}
+train_data <- read_csv("twitter_training.csv", col_names = c("ID", "Entity", "Sentiment", "Tweet_Content"))
+val_data <- read_csv("twitter_validation.csv", col_names = c("ID", "Entity", "Sentiment", "Tweet_Content"))
+
+head(train_data)
+
+#on verifie la taille de nos datasets et si on a du texte manquant
+# Nombre de lignes
+nrow(train_data)
+
+# Vérification des valeurs manquantes
+sum(is.na(train_data$Tweet_Content))
+
+# Suppression des lignes sans contenu textuel pour l'analyse
+train_data <- train_data %>% filter(!is.na(Tweet_Content))
+
+#on regarde comment sont réparties les classes dans notre dataset d'entrainement
+ggplot(train_data, aes(x = Sentiment, fill = Sentiment)) +
+  geom_bar() +
+  theme_minimal() +
+  labs(title = "Répartition globale des Sentiments",
+       x = "Catégorie de Sentiment",
+       y = "Nombre de Tweets") +
+  scale_fill_brewer(palette = "Set2")
+```
+
+## 1.2 Nettoyage des données
+On procède au nettoyage des tweets en supprimant les URLs, la ponctuation, les chiffres, les caractères spéciaux, et en convertissant le texte en minuscules.
+
+```{r cleaning_logic}
+library(stringr)
+library(tidytext)
+
+clean_tweets <- function(text) {
+  text <- str_to_lower(text) # Tout en minuscules
+  text <- str_replace_all(text, "http\\S+|www\\S+|&amp;", "") # Supprimer URLs
+  text <- str_replace_all(text, "[[:punct:]]", " ") # Supprimer ponctuation
+  text <- str_replace_all(text, "[[:digit:]]", "") # Supprimer chiffres
+  text <- str_replace_all(text, "[^\\x01-\\x7F]", "") # Supprimer caractères spéciaux non-ASCII
+  text <- str_squish(text) # Supprimer les espaces doubles ou inutiles
+  return(text)
+}
+# Application du nettoyage de base
+train_data <- train_data %>%
+  mutate(Tweet_Clean = clean_tweets(Tweet_Content))
+
+# Aperçu du résultat avant/après
+head(train_data[c("Tweet_Content", "Tweet_Clean")], 5)
+
+# Chargement de la liste des mots vides anglais
+data("stop_words")
+
+# Tokenisation (séparation mot par mot) et filtrage
+train_tokens <- train_data %>%
+  unnest_tokens(word, Tweet_Clean) %>%
+  anti_join(stop_words, by = "word")
+
+# Visualisation des mots les plus fréquents après nettoyage
+train_tokens %>%
+  count(word, sort = TRUE) %>%
+  head(10) %>%
+  ggplot(aes(x = reorder(word, n), y = n)) +
+  geom_col(fill = "steelblue") +
+  coord_flip() +
+  theme_minimal() +
+  labs(title = "Top 10 des mots les plus fréquents (nettoyés)",
+       x = "Mots", y = "Fréquence")
+```
+
+## 2. Visualisation des termes fréquents
+```{r}
+# Nuage de mots (Word Cloud)
+library(wordcloud)
+
+# Préparation des fréquences de mots
+word_counts <- train_tokens %>%
+  count(word, sort = TRUE)
+
+# Génération du nuage de mots
+set.seed(1234) # Pour la reproductibilité
+wordcloud(words = word_counts$word, 
+          freq = word_counts$n, 
+          min.freq = 50,           # On n'affiche que les mots qui apparaissent au moins 50 fois
+          max.words = 100,         # Limite à 100 mots pour la lisibilité
+          random.order = FALSE, 
+          rot.per = 0.35, 
+          colors = brewer.pal(8, "Dark2"))
+
+# Top 10 des mots pour les tweets positifs vs négatifs
+train_tokens %>%
+  filter(Sentiment %in% c("Positive", "Negative")) %>%
+  group_by(Sentiment) %>%
+  count(word, sort = TRUE) %>%
+  slice_max(n, n = 10) %>%
+  ungroup() %>%
+  ggplot(aes(x = reorder_within(word, n, Sentiment), y = n, fill = Sentiment)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~Sentiment, scales = "free_y") +
+  scale_x_reordered() +
+  coord_flip() +
+  theme_minimal() +
+  labs(title = "Mots les plus fréquents par polarité",
+       x = "Mots",
+       y = "Fréquence")
+```
+
+## 4. Analyse comparative par Entité
+Le dataset contient des tweets portant sur différentes entités (marques de tech, jeux vidéo). Cette section analyse comment le sentiment varie d'une marque à l'autre.
+### Top 10 des entités les plus actives
+Voyons d'abord quelles sont les entités qui génèrent le plus de volume de tweets dans notre base.
+```{r entity_volume}
+# Calcul du volume par entité
+entity_counts <- train_data %>%
+  count(Entity, sort = TRUE) %>%
+  head(10)
+
+ggplot(entity_counts, aes(x = reorder(Entity, n), y = n, fill = Entity)) +
+  geom_col() +
+  coord_flip() +
+  theme_minimal() +
+  guides(fill = "none") +
+  labs(title = "Top 10 des Entités les plus citées",
+       x = "Entité",
+       y = "Nombre de Tweets")
+
+# Sélection des 5 marques principales
+top_5_entities <- head(entity_counts$Entity, 5)
+
+train_data %>%
+  filter(Entity %in% top_5_entities) %>%
+  ggplot(aes(x = Entity, fill = Sentiment)) +
+  geom_bar(position = "fill") + # Utilisation de "fill" pour avoir des pourcentages
+  theme_minimal() +
+  scale_y_continuous(labels = scales::percent) +
+  labs(title = "Proportion des sentiments pour les marques leaders",
+       x = "Marque / Jeu",
+       y = "Pourcentage",
+       fill = "Sentiment") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+## 5. Comparaison Train vs Validation
+Pour s'assurer de la robustesse de notre analyse, il est essentiel de comparer la distribution des sentiments entre le jeu d'entraînement (`train_data`) et le jeu de validation (`val_data`).
+### Alignement des distributions
+Nous vérifions si les proportions de sentiments sont similaires dans les deux fichiers.
+```{r comparison_logic}
+# Préparation des données pour la comparaison
+train_dist <- train_data %>% 
+  count(Sentiment) %>% 
+  mutate(Dataset = "Training", prop = n / sum(n))
+
+val_dist <- val_data %>% 
+  count(Sentiment) %>% 
+  mutate(Dataset = "Validation", prop = n / sum(n))
+
+comparison_df <- bind_rows(train_dist, val_dist)
+
+# Visualisation comparative
+ggplot(comparison_df, aes(x = Sentiment, y = prop, fill = Dataset)) +
+  geom_col(position = "dodge") +
+  scale_y_continuous(labels = scales::percent) +
+  theme_minimal() +
+  labs(title = "Comparaison de la distribution des sentiments",
+       subtitle = "Vérification de la cohérence entre Training et Validation",
+       y = "Pourcentage du total",
+       x = "Catégorie de Sentiment") +
+  scale_fill_manual(values = c("Training" = "#5DADE2", "Validation" = "#EB984E"))
+```
+
+## 6. Analyse de l'importance des mots (Log Odds Ratio)
+Pour terminer, nous allons identifier quels mots sont les plus caractéristiques des sentiments "Positive" et "Negative". Cela permet de comprendre ce qui influence réellement le score de sentiment.
+```{r log_odds}
+# Calcul du ratio d'apparition des mots entre Positif et Négatif
+word_ratios <- train_tokens %>%
+  filter(Sentiment %in% c("Positive", "Negative")) %>%
+  count(word, Sentiment) %>%
+  pivot_wider(names_from = Sentiment, values_from = n, values_fill = 0) %>%
+  filter(Positive > 10 & Negative > 10) %>% # On garde les mots fréquents
+  mutate(log_ratio = log(Positive / Negative)) %>%
+  arrange(desc(log_ratio))
+
+# Affichage des mots les plus distinctifs
+bind_rows(
+  word_ratios %>% slice_max(log_ratio, n = 10), # Top Positifs
+  word_ratios %>% slice_min(log_ratio, n = 10)  # Top Négatifs
+) %>%
+  mutate(word = reorder(word, log_ratio)) %>%
+  ggplot(aes(x = word, y = log_ratio, fill = log_ratio > 0)) +
+  geom_col() +
+  coord_flip() +
+  scale_fill_manual(values = c("tomato", "skyblue"), labels = c("Négatif", "Positif")) +
+  theme_minimal() +
+  labs(title = "Mots les plus spécifiques par sentiment",
+       subtitle = "Log odds ratio (Positif vs Négatif)",
+       y = "Log Ratio (Positif <---> Négatif)",
+       x = "Mots",
+       fill = "Tendance")
+```

@@ -1,0 +1,201 @@
+---
+title: "Mini-Projet 1 : Reconnaissance des émotions par un classificateur bayésien"
+author: "Tonlop Lucas"
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+## Introduction
+Ce projet a pour but de développer un classificateur bayésien pour prédire les émotions à partir d'un jeu de données Kaggle. 
+
+## 1. Chargement et exploration des données.
+Nous avons un large dataset (5937 lignes et 2 colonnes).
+Les deux variables sont Comment (le texte) et Emotion (la cible).
+Les classes sont réparties entre plusieurs émotions (la joie, la peur, la colère).
+anger : 2000 / fear : 1937 / joy : 2000
+Le dataset est équilibré.
+
+
+
+```{r}
+# 1.1 Chargement du fichier téléchargé sur Kaggle
+data <- read.csv("Emotion_classify_Data.csv")
+
+# 1.2 Vérification de la structure des données
+summary(data)
+dimensions <- dim(data)
+print(paste("Nombre de lignes :", dimensions[1]))
+print(paste("Nombre de colonnes :", dimensions[2]))
+
+#Vérifier les émotions équilibrées (répartition)
+table(data$Emotion)
+prop.table(table(data$Emotion)) * 100
+str(data)
+
+# Calcul de la longueur des messages pour l'analyse
+data$longueur_mots <- sapply(strsplit(as.character(data$Comment), " "), length)
+
+# Visualisation de la distribution par émotion
+boxplot(longueur_mots ~ Emotion, data = data, 
+        main = "Distribution de la longueur des messages par émotion",
+        col = c("tomato", "lightblue", "lightgreen"),
+        ylab = "Nombre de mots", xlab = "Émotions")
+```
+
+### 2. Pré-traitement des données
+Le pré-traitement est une étape cruciale pour transformer le langage naturel en données numériques exploitables par le classifieur Bayésien.
+Nous allons normaliser le texte en passant tous les caractères en minuscules, puis supprimer la ponctuation, les chiffres et les espaces superflus
+Nous allons filtrer les mots de liaison fréquents (ex: "the", "and", "is") qui n'apportent aucune valeur sémantique pour la distinction des émotions.
+
+Nous passerons par une étape de tokenization (découpage en mots) et de stemming (réduction à la racine des mots) avec le package SnowballCpour uniformiser les termes.
+Vectorisation : Pour que le modèle puisse effectuer des calculs, nous avons utilisé la méthode TF-IDF (Term Frequency-Inverse Document Frequency). Cette technique permet de donner un poids plus important aux mots rares et significatifs d'une émotion, tout en pénalisant les mots trop fréquents dans l'ensemble du dataset.
+```{r}
+# 2.1. Passage en minuscules
+data$Comment_clean <- tolower(data$Comment)
+# Supprimer les chiffres
+data$Comment_clean <- gsub("[0-9]+", "", data$Comment_clean)
+# Supprimer la ponctuation et les caractères spéciaux
+data$Comment_clean <- gsub("[[:punct:]]", " ", data$Comment_clean)
+# Supprimer les espaces doubles
+data$Comment_clean <- gsub("\\s+", " ", data$Comment_clean)
+
+# Suppression des mots vifes (stop words), On retire les mots outils (the, a, is...) qui sont présents dans toutes les émotions et qui polluent le modèle.
+# Liste de mots vides (anglais)
+mots_vides <- c("i", "me", "my", "myself", "we", "our", "ours", "ourselves", "you", "your", "he", "she", "it", "the", "and", "is", "am", "are", "was", "were", "to", "at", "by", "in", "of")
+
+# Fonction pour retirer les mots
+removeWords <- function(text, words) { # nolint
+  patterns <- paste0("\\b(", paste(words, collapse="|"), ")\\b")
+  gsub(patterns, "", text)
+}
+data$Comment_clean <- removeWords(data$Comment_clean, mots_vides)
+
+#2.2 tokenization et stemming
+# Installation automatique de SnowballC si absent
+if(!require(SnowballC)) install.packages("SnowballC", repos='[https://cran.rstudio.com/](https://cran.rstudio.com/)') # nolint
+library(SnowballC)
+
+# Tokenization (découpage en mots)
+tokens_list <- strsplit(data$Comment_clean, "\\s+")
+
+# Stemming (réduction à la racine)
+data$Comment_stemmed <- sapply(tokens_list, function(x) {
+  paste(wordStem(x, language = "english"), collapse = " ")
+})
+
+# Vérification du résultat
+head(data$Comment_stemmed, 3)
+
+# 2.3. Vectorisation des textes
+# On utilise le package 'tm' pour créer la matrice
+if(!require(tm)) install.packages("tm")
+library(tm)
+
+# Création du Corpus (le dictionnaire de tes textes)
+corpus_final <- Corpus(VectorSource(data$Comment_stemmed))
+
+# Création de la Document Term Matrix (DTM) avec le calcul TF-IDF
+# On filtre les Sparse pour que l'ordinateur ne rame pas
+dtm_tfidf <- DocumentTermMatrix(corpus_final, 
+                               control = list(weighting = weightTfIdf))
+
+# On ne garde que les mots qui apparaissent dans au moins 1% des documents 
+# pour éviter d'avoir 50 000 colonnes inutiles
+dtm_clean <- removeSparseTerms(dtm_tfidf, 0.99)
+
+# Conversion en format de données (Data Frame) pour le modèle
+tfidf_df <- as.data.frame(as.matrix(dtm_clean))
+
+# On rajoute la colonne cible 'Emotion' au Data Frame
+tfidf_df$Emotion_Cible <- as.factor(data$Emotion)
+
+# Vérification du résultat
+print(paste("Nombre de mots (colonnes) retenus :", ncol(tfidf_df) - 1))
+dim(tfidf_df)
+# Afficher les 5 premières lignes et les 10 premières colonnes (mots)
+tfidf_df[1:5, 1:10]
+```
+
+### 3. Entraînement du modèle bayésien 
+Cette étape a consisté à construire le classifieur capable d'associer les caractéristiques textuelles (mots) aux émotions cibles.
+Pour évaluer la performance réelle du modèle, nous avons divisé la matrice TF-IDF en deux ensembles distincts à l'aide de la fonction createDataPartition du package caret
+Nous avons utilisé 80% des données pour l'entraînement du modèle et 20% pour les tests. (ce qui semblait le mieux)
+nous avons utilisé le package e1071 pour implémenter l'algorithme de classification bayésien naïf.
+Le modèle a été entraîné pour prédire la variable Emotion_Cible en utilisant l'ensemble des descripteurs textuels contenus dans le set d'apprentissage (Emotion_Cible ~ .)
+
+```{r}
+# Chargement du package
+if(!require(caret)) install.packages("caret", repos='[https://cran.rstudio.com/](https://cran.rstudio.com/)')
+library(caret)
+
+set.seed(123) # Pour que les probabilités soient stables
+
+# On crée l'index de séparation
+index_train <- createDataPartition(tfidf_df$Emotion_Cible, p = 0.8, list = FALSE)
+
+# On crée les deux ensembles
+train_set <- tfidf_df[index_train, ]
+test_set  <- tfidf_df[-index_train, ]
+print(paste("Nombre de lignes pour l'apprentissage :", nrow(train_set)))
+
+# Entraînement du modèle Naive Bayes avec e1071
+if(!require(e1071)) install.packages("e1071", repos='https://cran.rstudio.com/')
+library(e1071)
+
+# entrainement "Prédit l'Emotion_Cible en utilisant tout le reste"
+modele_nb <- naiveBayes(Emotion_Cible ~ ., data = train_set)
+print("L'installation et l'entraînement du modèle e1071 sont terminés !")
+
+```
+
+### 4. Évaluation du modèle
+Le modèle affiche une précision d'envrion 45% qui est un résultat qui n'est pas très bon. 
+Ce résultat est supérieur au hasard (33% pour 3 classes équilibrées) mais reste insuffisant pour une application réelle.
+Sensitivity : Anger : 0,3525. Fear : 0,1498. Joy : 0,8475
+Pos Pred Value (Précision) : Anger : 0,4669. Fear : 0,6744. Joy : 0,4243.
+
+La matrice de confusion nous permet de comprendre les erreurs du classifieur :
+Le modèle Bayesien Naïf montre une tendance forte à prédire l'émotion 'joy' (67,3% des prédictions totales) 
+ce qui crée de nombreux faux positifs pour la colère et la peur. On remarque notamment que sur 387 cas réels de 'fear', le modèle n'en a détecté correctement que 58, en en classant par erreur 216 comme étant de la joie.
+```{r}
+# Prédictions sur le jeu de test
+# On demande au modèle de deviner l'émotion pour chaque ligne du jeu de test
+predictions_nb <- predict(modele_nb, test_set)
+# Affichage des premières prédictions pour vérifier le format
+head(predictions_nb)
+
+# Matrice de Confusion et Métriques (Accuracy)
+# C'est l'outil standard pour mesurer la précision. Il permet de voir exactement quelles émotions sont bien classées et lesquelles sont confondues.
+
+# Chargement de caret pour les statistiques détaillées
+library(caret)
+
+# Génération de la matrice de confusion
+# On compare les prédictions (predictions_nb) aux vraies valeurs (test_set$Emotion_Cible)
+resultats <- confusionMatrix(predictions_nb, test_set$Emotion_Cible)
+
+# Affichage du bilan complet
+print(resultats)
+```
+
+### 5. Amélioration et optimisation du modèle
+```{r}
+# validation croisée k-fold
+train_control <- trainControl(method = "cv", number = 10)
+model_cv <- train(Emotion_Cible ~ ., data = train_set, method = "nb", trControl = train_control)
+```
+
+### 6. Conclusion
+Le classificateur bayésien naïf implémenté dans ce projet a permis de prédire les émotions à partir de textes avec une précision modérée.
+Cependant, plusieurs axes d'amélioration sont envisageables pour augmenter la performance du modèle :
+Déséquilibre des prédictions : Le modèle Bayesien a montré une forte tendance à prédire l'émotion "joy", créant un taux élevé de faux positifs.
+Chevauchement lexical : Les émotions négatives comme la colère et la peur partagent souvent un vocabulaire commun dans les commentaires, ce qui rend leur distinction difficile pour un modèle basé sur la probabilité simple des mots.
+
+Comme axe d'amélioration, on pourrait envisager :
+Ajuster la Sparsité : En modifiant le seuil de suppression des termes rares dans la matrice TF-IDF, on pourrait conserver plus de mots potentiellement informatifs.
+Utiliser des modèles plus sophistiqués : Des algorithmes comme les forêts aléatoires ou les réseaux de neurones pourraient capturer des relations plus complexes entre les mots et les émotions.
+
+Bilan : Ce projet a permis de mettre en œuvre une chaîne complète de traitement de données (NLP). Nous avons réussi à transformer des commentaires textuels en une matrice numérique TF-IDF et à entraîner un classifieur Bayesien fonctionnel.
+Bien que la précision globale soit de 45,3%, le modèle s'est révélé très efficace pour identifier les émotions positives

@@ -1,0 +1,454 @@
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+\documentclass[
+]{article}
+\usepackage{xcolor}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\setcounter{secnumdepth}{-\maxdimen} % remove section numbering
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provide euro and other symbols
+\else % if luatex or xetex
+  \usepackage{unicode-math} % this also loads fontspec
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+\usepackage{lmodern}
+\ifPDFTeX\else
+  % xetex/luatex font selection
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\makeatletter
+\@ifundefined{KOMAClassName}{% if non-KOMA class
+  \IfFileExists{parskip.sty}{%
+    \usepackage{parskip}
+  }{% else
+    \setlength{\parindent}{0pt}
+    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
+}{% if KOMA class
+  \KOMAoptions{parskip=half}}
+\makeatother
+\usepackage{color}
+\usepackage{fancyvrb}
+\newcommand{\VerbBar}{|}
+\newcommand{\VERB}{\Verb[commandchars=\\\{\}]}
+\DefineVerbatimEnvironment{Highlighting}{Verbatim}{commandchars=\\\{\}}
+% Add ',fontsize=\small' for more characters per line
+\usepackage{framed}
+\definecolor{shadecolor}{RGB}{248,248,248}
+\newenvironment{Shaded}{\begin{snugshade}}{\end{snugshade}}
+\newcommand{\AlertTok}[1]{\textcolor[rgb]{0.94,0.16,0.16}{#1}}
+\newcommand{\AnnotationTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\AttributeTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{#1}}
+\newcommand{\BaseNTok}[1]{\textcolor[rgb]{0.00,0.00,0.81}{#1}}
+\newcommand{\BuiltInTok}[1]{#1}
+\newcommand{\CharTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\CommentTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textit{#1}}}
+\newcommand{\CommentVarTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\ConstantTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{#1}}
+\newcommand{\ControlFlowTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{\textbf{#1}}}
+\newcommand{\DataTypeTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{#1}}
+\newcommand{\DecValTok}[1]{\textcolor[rgb]{0.00,0.00,0.81}{#1}}
+\newcommand{\DocumentationTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\ErrorTok}[1]{\textcolor[rgb]{0.64,0.00,0.00}{\textbf{#1}}}
+\newcommand{\ExtensionTok}[1]{#1}
+\newcommand{\FloatTok}[1]{\textcolor[rgb]{0.00,0.00,0.81}{#1}}
+\newcommand{\FunctionTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{\textbf{#1}}}
+\newcommand{\ImportTok}[1]{#1}
+\newcommand{\InformationTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\KeywordTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{\textbf{#1}}}
+\newcommand{\NormalTok}[1]{#1}
+\newcommand{\OperatorTok}[1]{\textcolor[rgb]{0.81,0.36,0.00}{\textbf{#1}}}
+\newcommand{\OtherTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{#1}}
+\newcommand{\PreprocessorTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textit{#1}}}
+\newcommand{\RegionMarkerTok}[1]{#1}
+\newcommand{\SpecialCharTok}[1]{\textcolor[rgb]{0.81,0.36,0.00}{\textbf{#1}}}
+\newcommand{\SpecialStringTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\StringTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\VariableTok}[1]{\textcolor[rgb]{0.00,0.00,0.00}{#1}}
+\newcommand{\VerbatimStringTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\WarningTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\usepackage{graphicx}
+\makeatletter
+\newsavebox\pandoc@box
+\newcommand*\pandocbounded[1]{% scales image to fit in text height/width
+  \sbox\pandoc@box{#1}%
+  \Gscale@div\@tempa{\textheight}{\dimexpr\ht\pandoc@box+\dp\pandoc@box\relax}%
+  \Gscale@div\@tempb{\linewidth}{\wd\pandoc@box}%
+  \ifdim\@tempb\p@<\@tempa\p@\let\@tempa\@tempb\fi% select the smaller of both
+  \ifdim\@tempa\p@<\p@\scalebox{\@tempa}{\usebox\pandoc@box}%
+  \else\usebox{\pandoc@box}%
+  \fi%
+}
+% Set default figure placement to htbp
+\def\fps@figure{htbp}
+\makeatother
+\setlength{\emergencystretch}{3em} % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\usepackage{bookmark}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
+\urlstyle{same}
+\hypersetup{
+  pdftitle={Analyse de Sentiment - Twitter Data},
+  pdfauthor={Tonlop Lucas},
+  hidelinks,
+  pdfcreator={LaTeX via pandoc}}
+
+\title{Analyse de Sentiment - Twitter Data}
+\author{Tonlop Lucas}
+\date{2026-02-19}
+
+\begin{document}
+\maketitle
+
+\subsection{1. Chargement des données}\label{chargement-des-donnuxe9es}
+
+On charge les datasets d'entraînement et de validation fournis, en
+spécifiant les noms des colonnes pour une meilleure lisibilité. On
+définira les colonnes comme suit : ID, Entité, Sentiment, Contenu du
+tweet.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{train\_data }\OtherTok{\textless{}{-}} \FunctionTok{read\_csv}\NormalTok{(}\StringTok{"twitter\_training.csv"}\NormalTok{, }\AttributeTok{col\_names =} \FunctionTok{c}\NormalTok{(}\StringTok{"ID"}\NormalTok{, }\StringTok{"Entity"}\NormalTok{, }\StringTok{"Sentiment"}\NormalTok{, }\StringTok{"Tweet\_Content"}\NormalTok{))}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## Rows: 74682 Columns: 4
+## -- Column specification --------------------------------------------------------
+## Delimiter: ","
+## chr (3): Entity, Sentiment, Tweet_Content
+## dbl (1): ID
+## 
+## i Use `spec()` to retrieve the full column specification for this data.
+## i Specify the column types or set `show_col_types = FALSE` to quiet this message.
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{val\_data }\OtherTok{\textless{}{-}} \FunctionTok{read\_csv}\NormalTok{(}\StringTok{"twitter\_validation.csv"}\NormalTok{, }\AttributeTok{col\_names =} \FunctionTok{c}\NormalTok{(}\StringTok{"ID"}\NormalTok{, }\StringTok{"Entity"}\NormalTok{, }\StringTok{"Sentiment"}\NormalTok{, }\StringTok{"Tweet\_Content"}\NormalTok{))}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## Rows: 1000 Columns: 4
+## -- Column specification --------------------------------------------------------
+## Delimiter: ","
+## chr (3): Entity, Sentiment, Tweet_Content
+## dbl (1): ID
+## 
+## i Use `spec()` to retrieve the full column specification for this data.
+## i Specify the column types or set `show_col_types = FALSE` to quiet this message.
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{head}\NormalTok{(train\_data)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## # A tibble: 6 x 4
+##      ID Entity      Sentiment Tweet_Content                                     
+##   <dbl> <chr>       <chr>     <chr>                                             
+## 1  2401 Borderlands Positive  im getting on borderlands and i will murder you a~
+## 2  2401 Borderlands Positive  I am coming to the borders and I will kill you al~
+## 3  2401 Borderlands Positive  im getting on borderlands and i will kill you all,
+## 4  2401 Borderlands Positive  im coming on borderlands and i will murder you al~
+## 5  2401 Borderlands Positive  im getting on borderlands 2 and i will murder you~
+## 6  2401 Borderlands Positive  im getting into borderlands and i can murder you ~
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\#on verifie la taille de nos datasets et si on a du texte manquant}
+\CommentTok{\# Nombre de lignes}
+\FunctionTok{nrow}\NormalTok{(train\_data)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 74682
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# Vérification des valeurs manquantes}
+\FunctionTok{sum}\NormalTok{(}\FunctionTok{is.na}\NormalTok{(train\_data}\SpecialCharTok{$}\NormalTok{Tweet\_Content))}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 858
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# Suppression des lignes sans contenu textuel pour l\textquotesingle{}analyse}
+\NormalTok{train\_data }\OtherTok{\textless{}{-}}\NormalTok{ train\_data }\SpecialCharTok{\%\textgreater{}\%} \FunctionTok{filter}\NormalTok{(}\SpecialCharTok{!}\FunctionTok{is.na}\NormalTok{(Tweet\_Content))}
+
+\CommentTok{\#on regarde comment sont réparties les classes dans notre dataset d\textquotesingle{}entrainement}
+\FunctionTok{ggplot}\NormalTok{(train\_data, }\FunctionTok{aes}\NormalTok{(}\AttributeTok{x =}\NormalTok{ Sentiment, }\AttributeTok{fill =}\NormalTok{ Sentiment)) }\SpecialCharTok{+}
+  \FunctionTok{geom\_bar}\NormalTok{() }\SpecialCharTok{+}
+  \FunctionTok{theme\_minimal}\NormalTok{() }\SpecialCharTok{+}
+  \FunctionTok{labs}\NormalTok{(}\AttributeTok{title =} \StringTok{"Répartition globale des Sentiments"}\NormalTok{,}
+       \AttributeTok{x =} \StringTok{"Catégorie de Sentiment"}\NormalTok{,}
+       \AttributeTok{y =} \StringTok{"Nombre de Tweets"}\NormalTok{) }\SpecialCharTok{+}
+  \FunctionTok{scale\_fill\_brewer}\NormalTok{(}\AttributeTok{palette =} \StringTok{"Set2"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\pandocbounded{\includegraphics[keepaspectratio]{Projet2_files/figure-latex/unnamed-chunk-1-1.pdf}}
+
+\subsection{1.2 Nettoyage des données}\label{nettoyage-des-donnuxe9es}
+
+On procède au nettoyage des tweets en supprimant les URLs, la
+ponctuation, les chiffres, les caractères spéciaux, et en convertissant
+le texte en minuscules.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{library}\NormalTok{(stringr)}
+\FunctionTok{library}\NormalTok{(tidytext)}
+
+\NormalTok{clean\_tweets }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(text) \{}
+\NormalTok{  text }\OtherTok{\textless{}{-}} \FunctionTok{str\_to\_lower}\NormalTok{(text) }\CommentTok{\# Tout en minuscules}
+\NormalTok{  text }\OtherTok{\textless{}{-}} \FunctionTok{str\_replace\_all}\NormalTok{(text, }\StringTok{"http}\SpecialCharTok{\textbackslash{}\textbackslash{}}\StringTok{S+|www}\SpecialCharTok{\textbackslash{}\textbackslash{}}\StringTok{S+|\&amp;"}\NormalTok{, }\StringTok{""}\NormalTok{) }\CommentTok{\# Supprimer URLs}
+\NormalTok{  text }\OtherTok{\textless{}{-}} \FunctionTok{str\_replace\_all}\NormalTok{(text, }\StringTok{"[[:punct:]]"}\NormalTok{, }\StringTok{" "}\NormalTok{) }\CommentTok{\# Supprimer ponctuation}
+\NormalTok{  text }\OtherTok{\textless{}{-}} \FunctionTok{str\_replace\_all}\NormalTok{(text, }\StringTok{"[[:digit:]]"}\NormalTok{, }\StringTok{""}\NormalTok{) }\CommentTok{\# Supprimer chiffres}
+\NormalTok{  text }\OtherTok{\textless{}{-}} \FunctionTok{str\_replace\_all}\NormalTok{(text, }\StringTok{"[\^{}}\SpecialCharTok{\textbackslash{}\textbackslash{}}\StringTok{x01{-}}\SpecialCharTok{\textbackslash{}\textbackslash{}}\StringTok{x7F]"}\NormalTok{, }\StringTok{""}\NormalTok{) }\CommentTok{\# Supprimer caractères spéciaux non{-}ASCII}
+\NormalTok{  text }\OtherTok{\textless{}{-}} \FunctionTok{str\_squish}\NormalTok{(text) }\CommentTok{\# Supprimer les espaces doubles ou inutiles}
+  \FunctionTok{return}\NormalTok{(text)}
+\NormalTok{\}}
+\CommentTok{\# Application du nettoyage de base}
+\NormalTok{train\_data }\OtherTok{\textless{}{-}}\NormalTok{ train\_data }\SpecialCharTok{\%\textgreater{}\%}
+  \FunctionTok{mutate}\NormalTok{(}\AttributeTok{Tweet\_Clean =} \FunctionTok{clean\_tweets}\NormalTok{(Tweet\_Content))}
+
+\CommentTok{\# Aperçu du résultat avant/après}
+\FunctionTok{head}\NormalTok{(train\_data[}\FunctionTok{c}\NormalTok{(}\StringTok{"Tweet\_Content"}\NormalTok{, }\StringTok{"Tweet\_Clean"}\NormalTok{)], }\DecValTok{5}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## # A tibble: 5 x 2
+##   Tweet_Content                                             Tweet_Clean         
+##   <chr>                                                     <chr>               
+## 1 im getting on borderlands and i will murder you all ,     im getting on borde~
+## 2 I am coming to the borders and I will kill you all,       i am coming to the ~
+## 3 im getting on borderlands and i will kill you all,        im getting on borde~
+## 4 im coming on borderlands and i will murder you all,       im coming on border~
+## 5 im getting on borderlands 2 and i will murder you me all, im getting on borde~
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# Chargement de la liste des mots vides anglais}
+\FunctionTok{data}\NormalTok{(}\StringTok{"stop\_words"}\NormalTok{)}
+
+\CommentTok{\# Tokenisation (séparation mot par mot) et filtrage}
+\NormalTok{train\_tokens }\OtherTok{\textless{}{-}}\NormalTok{ train\_data }\SpecialCharTok{\%\textgreater{}\%}
+  \FunctionTok{unnest\_tokens}\NormalTok{(word, Tweet\_Clean) }\SpecialCharTok{\%\textgreater{}\%}
+  \FunctionTok{anti\_join}\NormalTok{(stop\_words, }\AttributeTok{by =} \StringTok{"word"}\NormalTok{)}
+
+\CommentTok{\# Visualisation des mots les plus fréquents après nettoyage}
+\NormalTok{train\_tokens }\SpecialCharTok{\%\textgreater{}\%}
+  \FunctionTok{count}\NormalTok{(word, }\AttributeTok{sort =} \ConstantTok{TRUE}\NormalTok{) }\SpecialCharTok{\%\textgreater{}\%}
+  \FunctionTok{head}\NormalTok{(}\DecValTok{10}\NormalTok{) }\SpecialCharTok{\%\textgreater{}\%}
+  \FunctionTok{ggplot}\NormalTok{(}\FunctionTok{aes}\NormalTok{(}\AttributeTok{x =} \FunctionTok{reorder}\NormalTok{(word, n), }\AttributeTok{y =}\NormalTok{ n)) }\SpecialCharTok{+}
+  \FunctionTok{geom\_col}\NormalTok{(}\AttributeTok{fill =} \StringTok{"steelblue"}\NormalTok{) }\SpecialCharTok{+}
+  \FunctionTok{coord\_flip}\NormalTok{() }\SpecialCharTok{+}
+  \FunctionTok{theme\_minimal}\NormalTok{() }\SpecialCharTok{+}
+  \FunctionTok{labs}\NormalTok{(}\AttributeTok{title =} \StringTok{"Top 10 des mots les plus fréquents (nettoyés)"}\NormalTok{,}
+       \AttributeTok{x =} \StringTok{"Mots"}\NormalTok{, }\AttributeTok{y =} \StringTok{"Fréquence"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\pandocbounded{\includegraphics[keepaspectratio]{Projet2_files/figure-latex/cleaning_logic-1.pdf}}
+
+\subsection{2. Visualisation des termes
+fréquents}\label{visualisation-des-termes-fruxe9quents}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# Nuage de mots (Word Cloud)}
+\FunctionTok{library}\NormalTok{(wordcloud)}
+
+\CommentTok{\# Préparation des fréquences de mots}
+\NormalTok{word\_counts }\OtherTok{\textless{}{-}}\NormalTok{ train\_tokens }\SpecialCharTok{\%\textgreater{}\%}
+  \FunctionTok{count}\NormalTok{(word, }\AttributeTok{sort =} \ConstantTok{TRUE}\NormalTok{)}
+
+\CommentTok{\# Génération du nuage de mots}
+\FunctionTok{set.seed}\NormalTok{(}\DecValTok{1234}\NormalTok{) }\CommentTok{\# Pour la reproductibilité}
+\FunctionTok{wordcloud}\NormalTok{(}\AttributeTok{words =}\NormalTok{ word\_counts}\SpecialCharTok{$}\NormalTok{word, }
+          \AttributeTok{freq =}\NormalTok{ word\_counts}\SpecialCharTok{$}\NormalTok{n, }
+          \AttributeTok{min.freq =} \DecValTok{50}\NormalTok{,           }\CommentTok{\# On n\textquotesingle{}affiche que les mots qui apparaissent au moins 50 fois}
+          \AttributeTok{max.words =} \DecValTok{100}\NormalTok{,         }\CommentTok{\# Limite à 100 mots pour la lisibilité}
+          \AttributeTok{random.order =} \ConstantTok{FALSE}\NormalTok{, }
+          \AttributeTok{rot.per =} \FloatTok{0.35}\NormalTok{, }
+          \AttributeTok{colors =} \FunctionTok{brewer.pal}\NormalTok{(}\DecValTok{8}\NormalTok{, }\StringTok{"Dark2"}\NormalTok{))}
+\end{Highlighting}
+\end{Shaded}
+
+\pandocbounded{\includegraphics[keepaspectratio]{Projet2_files/figure-latex/unnamed-chunk-2-1.pdf}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# Top 10 des mots pour les tweets positifs vs négatifs}
+\NormalTok{train\_tokens }\SpecialCharTok{\%\textgreater{}\%}
+  \FunctionTok{filter}\NormalTok{(Sentiment }\SpecialCharTok{\%in\%} \FunctionTok{c}\NormalTok{(}\StringTok{"Positive"}\NormalTok{, }\StringTok{"Negative"}\NormalTok{)) }\SpecialCharTok{\%\textgreater{}\%}
+  \FunctionTok{group\_by}\NormalTok{(Sentiment) }\SpecialCharTok{\%\textgreater{}\%}
+  \FunctionTok{count}\NormalTok{(word, }\AttributeTok{sort =} \ConstantTok{TRUE}\NormalTok{) }\SpecialCharTok{\%\textgreater{}\%}
+  \FunctionTok{slice\_max}\NormalTok{(n, }\AttributeTok{n =} \DecValTok{10}\NormalTok{) }\SpecialCharTok{\%\textgreater{}\%}
+  \FunctionTok{ungroup}\NormalTok{() }\SpecialCharTok{\%\textgreater{}\%}
+  \FunctionTok{ggplot}\NormalTok{(}\FunctionTok{aes}\NormalTok{(}\AttributeTok{x =} \FunctionTok{reorder\_within}\NormalTok{(word, n, Sentiment), }\AttributeTok{y =}\NormalTok{ n, }\AttributeTok{fill =}\NormalTok{ Sentiment)) }\SpecialCharTok{+}
+  \FunctionTok{geom\_col}\NormalTok{(}\AttributeTok{show.legend =} \ConstantTok{FALSE}\NormalTok{) }\SpecialCharTok{+}
+  \FunctionTok{facet\_wrap}\NormalTok{(}\SpecialCharTok{\textasciitilde{}}\NormalTok{Sentiment, }\AttributeTok{scales =} \StringTok{"free\_y"}\NormalTok{) }\SpecialCharTok{+}
+  \FunctionTok{scale\_x\_reordered}\NormalTok{() }\SpecialCharTok{+}
+  \FunctionTok{coord\_flip}\NormalTok{() }\SpecialCharTok{+}
+  \FunctionTok{theme\_minimal}\NormalTok{() }\SpecialCharTok{+}
+  \FunctionTok{labs}\NormalTok{(}\AttributeTok{title =} \StringTok{"Mots les plus fréquents par polarité"}\NormalTok{,}
+       \AttributeTok{x =} \StringTok{"Mots"}\NormalTok{,}
+       \AttributeTok{y =} \StringTok{"Fréquence"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\pandocbounded{\includegraphics[keepaspectratio]{Projet2_files/figure-latex/unnamed-chunk-2-2.pdf}}
+
+\subsection{4. Analyse comparative par
+Entité}\label{analyse-comparative-par-entituxe9}
+
+Le dataset contient des tweets portant sur différentes entités (marques
+de tech, jeux vidéo). Cette section analyse comment le sentiment varie
+d'une marque à l'autre. \#\#\# Top 10 des entités les plus actives
+Voyons d'abord quelles sont les entités qui génèrent le plus de volume
+de tweets dans notre base.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# Calcul du volume par entité}
+\NormalTok{entity\_counts }\OtherTok{\textless{}{-}}\NormalTok{ train\_data }\SpecialCharTok{\%\textgreater{}\%}
+  \FunctionTok{count}\NormalTok{(Entity, }\AttributeTok{sort =} \ConstantTok{TRUE}\NormalTok{) }\SpecialCharTok{\%\textgreater{}\%}
+  \FunctionTok{head}\NormalTok{(}\DecValTok{10}\NormalTok{)}
+
+\FunctionTok{ggplot}\NormalTok{(entity\_counts, }\FunctionTok{aes}\NormalTok{(}\AttributeTok{x =} \FunctionTok{reorder}\NormalTok{(Entity, n), }\AttributeTok{y =}\NormalTok{ n, }\AttributeTok{fill =}\NormalTok{ Entity)) }\SpecialCharTok{+}
+  \FunctionTok{geom\_col}\NormalTok{() }\SpecialCharTok{+}
+  \FunctionTok{coord\_flip}\NormalTok{() }\SpecialCharTok{+}
+  \FunctionTok{theme\_minimal}\NormalTok{() }\SpecialCharTok{+}
+  \FunctionTok{guides}\NormalTok{(}\AttributeTok{fill =} \StringTok{"none"}\NormalTok{) }\SpecialCharTok{+}
+  \FunctionTok{labs}\NormalTok{(}\AttributeTok{title =} \StringTok{"Top 10 des Entités les plus citées"}\NormalTok{,}
+       \AttributeTok{x =} \StringTok{"Entité"}\NormalTok{,}
+       \AttributeTok{y =} \StringTok{"Nombre de Tweets"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\pandocbounded{\includegraphics[keepaspectratio]{Projet2_files/figure-latex/entity_volume-1.pdf}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# Sélection des 5 marques principales}
+\NormalTok{top\_5\_entities }\OtherTok{\textless{}{-}} \FunctionTok{head}\NormalTok{(entity\_counts}\SpecialCharTok{$}\NormalTok{Entity, }\DecValTok{5}\NormalTok{)}
+
+\NormalTok{train\_data }\SpecialCharTok{\%\textgreater{}\%}
+  \FunctionTok{filter}\NormalTok{(Entity }\SpecialCharTok{\%in\%}\NormalTok{ top\_5\_entities) }\SpecialCharTok{\%\textgreater{}\%}
+  \FunctionTok{ggplot}\NormalTok{(}\FunctionTok{aes}\NormalTok{(}\AttributeTok{x =}\NormalTok{ Entity, }\AttributeTok{fill =}\NormalTok{ Sentiment)) }\SpecialCharTok{+}
+  \FunctionTok{geom\_bar}\NormalTok{(}\AttributeTok{position =} \StringTok{"fill"}\NormalTok{) }\SpecialCharTok{+} \CommentTok{\# Utilisation de "fill" pour avoir des pourcentages}
+  \FunctionTok{theme\_minimal}\NormalTok{() }\SpecialCharTok{+}
+  \FunctionTok{scale\_y\_continuous}\NormalTok{(}\AttributeTok{labels =}\NormalTok{ scales}\SpecialCharTok{::}\NormalTok{percent) }\SpecialCharTok{+}
+  \FunctionTok{labs}\NormalTok{(}\AttributeTok{title =} \StringTok{"Proportion des sentiments pour les marques leaders"}\NormalTok{,}
+       \AttributeTok{x =} \StringTok{"Marque / Jeu"}\NormalTok{,}
+       \AttributeTok{y =} \StringTok{"Pourcentage"}\NormalTok{,}
+       \AttributeTok{fill =} \StringTok{"Sentiment"}\NormalTok{) }\SpecialCharTok{+}
+  \FunctionTok{theme}\NormalTok{(}\AttributeTok{axis.text.x =} \FunctionTok{element\_text}\NormalTok{(}\AttributeTok{angle =} \DecValTok{45}\NormalTok{, }\AttributeTok{hjust =} \DecValTok{1}\NormalTok{))}
+\end{Highlighting}
+\end{Shaded}
+
+\pandocbounded{\includegraphics[keepaspectratio]{Projet2_files/figure-latex/entity_volume-2.pdf}}
+
+\subsection{5. Comparaison Train vs
+Validation}\label{comparaison-train-vs-validation}
+
+Pour s'assurer de la robustesse de notre analyse, il est essentiel de
+comparer la distribution des sentiments entre le jeu d'entraînement
+(\texttt{train\_data}) et le jeu de validation (\texttt{val\_data}).
+\#\#\# Alignement des distributions Nous vérifions si les proportions de
+sentiments sont similaires dans les deux fichiers.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# Préparation des données pour la comparaison}
+\NormalTok{train\_dist }\OtherTok{\textless{}{-}}\NormalTok{ train\_data }\SpecialCharTok{\%\textgreater{}\%} 
+  \FunctionTok{count}\NormalTok{(Sentiment) }\SpecialCharTok{\%\textgreater{}\%} 
+  \FunctionTok{mutate}\NormalTok{(}\AttributeTok{Dataset =} \StringTok{"Training"}\NormalTok{, }\AttributeTok{prop =}\NormalTok{ n }\SpecialCharTok{/} \FunctionTok{sum}\NormalTok{(n))}
+
+\NormalTok{val\_dist }\OtherTok{\textless{}{-}}\NormalTok{ val\_data }\SpecialCharTok{\%\textgreater{}\%} 
+  \FunctionTok{count}\NormalTok{(Sentiment) }\SpecialCharTok{\%\textgreater{}\%} 
+  \FunctionTok{mutate}\NormalTok{(}\AttributeTok{Dataset =} \StringTok{"Validation"}\NormalTok{, }\AttributeTok{prop =}\NormalTok{ n }\SpecialCharTok{/} \FunctionTok{sum}\NormalTok{(n))}
+
+\NormalTok{comparison\_df }\OtherTok{\textless{}{-}} \FunctionTok{bind\_rows}\NormalTok{(train\_dist, val\_dist)}
+
+\CommentTok{\# Visualisation comparative}
+\FunctionTok{ggplot}\NormalTok{(comparison\_df, }\FunctionTok{aes}\NormalTok{(}\AttributeTok{x =}\NormalTok{ Sentiment, }\AttributeTok{y =}\NormalTok{ prop, }\AttributeTok{fill =}\NormalTok{ Dataset)) }\SpecialCharTok{+}
+  \FunctionTok{geom\_col}\NormalTok{(}\AttributeTok{position =} \StringTok{"dodge"}\NormalTok{) }\SpecialCharTok{+}
+  \FunctionTok{scale\_y\_continuous}\NormalTok{(}\AttributeTok{labels =}\NormalTok{ scales}\SpecialCharTok{::}\NormalTok{percent) }\SpecialCharTok{+}
+  \FunctionTok{theme\_minimal}\NormalTok{() }\SpecialCharTok{+}
+  \FunctionTok{labs}\NormalTok{(}\AttributeTok{title =} \StringTok{"Comparaison de la distribution des sentiments"}\NormalTok{,}
+       \AttributeTok{subtitle =} \StringTok{"Vérification de la cohérence entre Training et Validation"}\NormalTok{,}
+       \AttributeTok{y =} \StringTok{"Pourcentage du total"}\NormalTok{,}
+       \AttributeTok{x =} \StringTok{"Catégorie de Sentiment"}\NormalTok{) }\SpecialCharTok{+}
+  \FunctionTok{scale\_fill\_manual}\NormalTok{(}\AttributeTok{values =} \FunctionTok{c}\NormalTok{(}\StringTok{"Training"} \OtherTok{=} \StringTok{"\#5DADE2"}\NormalTok{, }\StringTok{"Validation"} \OtherTok{=} \StringTok{"\#EB984E"}\NormalTok{))}
+\end{Highlighting}
+\end{Shaded}
+
+\pandocbounded{\includegraphics[keepaspectratio]{Projet2_files/figure-latex/comparison_logic-1.pdf}}
+
+\subsection{6. Analyse de l'importance des mots (Log Odds
+Ratio)}\label{analyse-de-limportance-des-mots-log-odds-ratio}
+
+Pour terminer, nous allons identifier quels mots sont les plus
+caractéristiques des sentiments ``Positive'' et ``Negative''. Cela
+permet de comprendre ce qui influence réellement le score de sentiment.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# Calcul du ratio d\textquotesingle{}apparition des mots entre Positif et Négatif}
+\NormalTok{word\_ratios }\OtherTok{\textless{}{-}}\NormalTok{ train\_tokens }\SpecialCharTok{\%\textgreater{}\%}
+  \FunctionTok{filter}\NormalTok{(Sentiment }\SpecialCharTok{\%in\%} \FunctionTok{c}\NormalTok{(}\StringTok{"Positive"}\NormalTok{, }\StringTok{"Negative"}\NormalTok{)) }\SpecialCharTok{\%\textgreater{}\%}
+  \FunctionTok{count}\NormalTok{(word, Sentiment) }\SpecialCharTok{\%\textgreater{}\%}
+  \FunctionTok{pivot\_wider}\NormalTok{(}\AttributeTok{names\_from =}\NormalTok{ Sentiment, }\AttributeTok{values\_from =}\NormalTok{ n, }\AttributeTok{values\_fill =} \DecValTok{0}\NormalTok{) }\SpecialCharTok{\%\textgreater{}\%}
+  \FunctionTok{filter}\NormalTok{(Positive }\SpecialCharTok{\textgreater{}} \DecValTok{10} \SpecialCharTok{\&}\NormalTok{ Negative }\SpecialCharTok{\textgreater{}} \DecValTok{10}\NormalTok{) }\SpecialCharTok{\%\textgreater{}\%} \CommentTok{\# On garde les mots fréquents}
+  \FunctionTok{mutate}\NormalTok{(}\AttributeTok{log\_ratio =} \FunctionTok{log}\NormalTok{(Positive }\SpecialCharTok{/}\NormalTok{ Negative)) }\SpecialCharTok{\%\textgreater{}\%}
+  \FunctionTok{arrange}\NormalTok{(}\FunctionTok{desc}\NormalTok{(log\_ratio))}
+
+\CommentTok{\# Affichage des mots les plus distinctifs}
+\FunctionTok{bind\_rows}\NormalTok{(}
+\NormalTok{  word\_ratios }\SpecialCharTok{\%\textgreater{}\%} \FunctionTok{slice\_max}\NormalTok{(log\_ratio, }\AttributeTok{n =} \DecValTok{10}\NormalTok{), }\CommentTok{\# Top Positifs}
+\NormalTok{  word\_ratios }\SpecialCharTok{\%\textgreater{}\%} \FunctionTok{slice\_min}\NormalTok{(log\_ratio, }\AttributeTok{n =} \DecValTok{10}\NormalTok{)  }\CommentTok{\# Top Négatifs}
+\NormalTok{) }\SpecialCharTok{\%\textgreater{}\%}
+  \FunctionTok{mutate}\NormalTok{(}\AttributeTok{word =} \FunctionTok{reorder}\NormalTok{(word, log\_ratio)) }\SpecialCharTok{\%\textgreater{}\%}
+  \FunctionTok{ggplot}\NormalTok{(}\FunctionTok{aes}\NormalTok{(}\AttributeTok{x =}\NormalTok{ word, }\AttributeTok{y =}\NormalTok{ log\_ratio, }\AttributeTok{fill =}\NormalTok{ log\_ratio }\SpecialCharTok{\textgreater{}} \DecValTok{0}\NormalTok{)) }\SpecialCharTok{+}
+  \FunctionTok{geom\_col}\NormalTok{() }\SpecialCharTok{+}
+  \FunctionTok{coord\_flip}\NormalTok{() }\SpecialCharTok{+}
+  \FunctionTok{scale\_fill\_manual}\NormalTok{(}\AttributeTok{values =} \FunctionTok{c}\NormalTok{(}\StringTok{"tomato"}\NormalTok{, }\StringTok{"skyblue"}\NormalTok{), }\AttributeTok{labels =} \FunctionTok{c}\NormalTok{(}\StringTok{"Négatif"}\NormalTok{, }\StringTok{"Positif"}\NormalTok{)) }\SpecialCharTok{+}
+  \FunctionTok{theme\_minimal}\NormalTok{() }\SpecialCharTok{+}
+  \FunctionTok{labs}\NormalTok{(}\AttributeTok{title =} \StringTok{"Mots les plus spécifiques par sentiment"}\NormalTok{,}
+       \AttributeTok{subtitle =} \StringTok{"Log odds ratio (Positif vs Négatif)"}\NormalTok{,}
+       \AttributeTok{y =} \StringTok{"Log Ratio (Positif \textless{}{-}{-}{-}\textgreater{} Négatif)"}\NormalTok{,}
+       \AttributeTok{x =} \StringTok{"Mots"}\NormalTok{,}
+       \AttributeTok{fill =} \StringTok{"Tendance"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\pandocbounded{\includegraphics[keepaspectratio]{Projet2_files/figure-latex/log_odds-1.pdf}}
+
+\end{document}
